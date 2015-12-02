@@ -27,6 +27,12 @@ include $(CORE_DEPTH)/coreconf/config.mk
 
 include ../common/gtest.mk
 
+ifdef USE_SYSTEM_ZLIB
+OS_LIBS += $(ZLIB_LIBS)
+else
+EXTRA_LIBS += $(ZLIB_LIBS)
+endif
+
 #######################################################################
 # (5) Execute "global" rules. (OPTIONAL)                              #
 #######################################################################
