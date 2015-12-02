@@ -8,6 +8,7 @@
 #define scoped_ptrs_h__
 
 #include "keyhi.h"
+#include "pk11pub.h"
 
 namespace nss_test {
 

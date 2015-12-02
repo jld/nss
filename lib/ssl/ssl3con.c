@@ -940,7 +940,7 @@ ssl3_NegotiateVersion(sslSocket *ss, SSL3ProtocolVersion peerVersion,
     return SECSuccess;
 }
 
-static SECStatus
+SECStatus
 ssl3_GetNewRandom(SSL3Random *random)
 {
     SECStatus rv;
