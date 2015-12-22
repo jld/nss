@@ -188,8 +188,6 @@ static void Usage()
     PRINTUSAGE("", 	"-e", "rsa public exponent");
     PRINTUSAGE("", 	"-r", "repetitions of the test");
     fprintf(stderr, "\n");
-    PRINTUSAGE(progName, "-F", "Run the FIPS self-test");
-    fprintf(stderr, "\n");
     PRINTUSAGE(progName, "-T [-m mode1,mode2...]", "Run the BLAPI self-test");
     fprintf(stderr, "\n");
     exit(1);
@@ -3351,7 +3349,6 @@ static int doRSAPopulateTest(unsigned int keySize, unsigned long exponent)
 enum {
     cmd_Decrypt = 0,
     cmd_Encrypt,
-    cmd_FIPS,
     cmd_Hash,
     cmd_Nonce,
     cmd_Dump,
@@ -3404,7 +3401,6 @@ static secuCommandFlag bltest_commands[] =
 {
     { /* cmd_Decrypt	*/ 'D', PR_FALSE, 0, PR_FALSE },
     { /* cmd_Encrypt	*/ 'E', PR_FALSE, 0, PR_FALSE },
-    { /* cmd_FIPS	*/ 'F', PR_FALSE, 0, PR_FALSE },
     { /* cmd_Hash	*/ 'H', PR_FALSE, 0, PR_FALSE },
     { /* cmd_Nonce      */ 'N', PR_FALSE, 0, PR_FALSE },
     { /* cmd_Dump	*/ 'P', PR_FALSE, 0, PR_FALSE },
@@ -3606,16 +3602,6 @@ int main(int argc, char **argv)
 	                    encrypt, decrypt);
 	PORT_Free(cipherInfo);
 	return rv == SECSuccess ? 0 : 1;
-    }
-
-    /* Do FIPS self-test */
-    if (bltest.commands[cmd_FIPS].activated) {
-	CK_RV ckrv = sftk_fipsPowerUpSelfTest();
-	fprintf(stdout, "CK_RV: %ld.\n", ckrv);
-        PORT_Free(cipherInfo);
-        if (ckrv == CKR_OK)
-            return SECSuccess;
-        return SECFailure;
     }
 
     /*
