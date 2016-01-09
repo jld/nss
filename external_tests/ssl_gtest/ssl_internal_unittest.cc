@@ -1,28 +1,24 @@
-/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set ts=2 et sw=2 tw=80: */
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this file,
- * You can obtain one at http://mozilla.org/MPL/2.0/. */
+// -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
+// vim: set ts=2 et sw=2 tw=80:
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this file,
+// You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include "ssl.h"
-#include "sslerr.h"
-#include "keyhi.h"
+#include <string.h>
 
-extern "C" {
-// Work around sslimpl.h being non-C++-safe.
-#define explicit explicit_
-#include "sslimpl.h"
-#undef explicit
-}
-
-#include "gtest_utils.h"
-#include "scoped_ptrs.h"
-#include "test_io.h"
+#include <memory> // for unique_ptr
 
 #include "prthread.h"
 
-#include <memory> // for unique_ptr
-#include <string.h>
+#include "gtest_utils.h"
+#include "keyhi.h"
+#include "scoped_ptrs.h"
+#include "ssl.h"
+#include "sslerr.h"
+extern "C" {
+#include "sslimpl.h"
+}
+#include "test_io.h"
 
 #ifdef GTEST_HAS_DEATH_TEST
 #ifdef DEBUG
@@ -36,39 +32,34 @@ extern "C" {
 namespace nss_test {
 
 class InternalSocketTest : public ::testing::Test {
-protected:
-  PRFileDesc *fd_;
-  sslSocket *ss_;
 public:
   InternalSocketTest() : fd_(nullptr), ss_(nullptr) { }
   ~InternalSocketTest() {
-    TearDown();
+    if (fd_) {
+      PR_Close(fd_);
+    }
   }
 
   void SetUp() {
     fd_ = DummyPrSocket::CreateFD("fake", STREAM);
-    EXPECT_TRUE(fd_);
-    EXPECT_EQ(fd_, SSL_ImportFD(nullptr, fd_));
+    ASSERT_NE(nullptr, fd_);
+    ASSERT_EQ(fd_, SSL_ImportFD(nullptr, fd_));
     ss_ = ssl_FindSocket(fd_);
-    EXPECT_TRUE(ss_);
+    ASSERT_NE(nullptr, ss_);
   }
 
-  void TearDown() {
-    if (fd_) {
-      PR_Close(fd_);
-      fd_ = nullptr;
-      ss_ = nullptr;
-    }
-  }
+protected:
+  PRFileDesc *fd_;
+  sslSocket *ss_;
 };
 
 class InternalKeyPairTest : public ::testing::Test {
-protected:
-  ssl3KeyPair *keys_;
 public:
-  InternalKeyPairTest() : keys_() { }
+  InternalKeyPairTest() : keys_(nullptr) { }
   ~InternalKeyPairTest() {
-    TearDown();
+    if (keys_) {
+      ssl3_FreeKeyPair(keys_);
+    }
   }
 
   void SetUp() {
@@ -77,34 +68,31 @@ public:
     ScopedSECKEYPrivateKey privKey;
     ScopedSECKEYPublicKey pubKey;
 
-    ecParams.reset(SECITEM_AllocItem(/* arena */ nullptr,
-                                     /* existing item */ nullptr,
-                                     /* len */ 0));
-    EXPECT_TRUE(ecParams);
-    EXPECT_EQ(SECSuccess,
-              ssl3_ECName2Params(/* arena */ nullptr, curve, ecParams.get()));
+    ecParams.reset(SECITEM_AllocItem(nullptr, // no arena
+                                     nullptr, // not reallocating
+                                     0));     // length
+    ASSERT_TRUE(ecParams);
+    ASSERT_EQ(SECSuccess,
+              ssl3_ECName2Params(nullptr, // no arena
+                                 curve, ecParams.get()));
     EXPECT_NE(nullptr, ecParams->data);
     EXPECT_NE(0, ecParams->len);
 
     {
       SECKEYPublicKey *tmpPubKey;
       privKey.reset(SECKEY_CreateECPrivateKey(ecParams.get(), &tmpPubKey,
-                                              /* UI context */ nullptr));
+                                              nullptr)); // no UI context
       pubKey.reset(tmpPubKey);
     }
-    EXPECT_TRUE(privKey);
-    EXPECT_TRUE(pubKey);
+    ASSERT_TRUE(privKey);
+    ASSERT_TRUE(pubKey);
 
     keys_ = ssl3_NewKeyPair(privKey.release(), pubKey.release());
-    EXPECT_TRUE(keys_);
+    ASSERT_TRUE(keys_);
   }
 
-  void TearDown() {
-    if (keys_) {
-      ssl3_FreeKeyPair(keys_);
-      keys_ = nullptr;
-    }
-  }
+protected:
+  ssl3KeyPair *keys_;
 };
 
 template<class F>
@@ -127,8 +115,8 @@ RunOnThreads(size_t n, const F& func)
                                  PR_PRIORITY_NORMAL,
                                  PR_GLOBAL_THREAD,
                                  PR_JOINABLE_THREAD,
-                                 0 /* us default stack size */);
-    EXPECT_NE(nullptr, threads[i]);
+                                 0); // use default stack size
+    ASSERT_NE(nullptr, threads[i]);
   }
   for (size_t i = 0; i < n; ++i) {
     EXPECT_EQ(PR_SUCCESS, PR_JoinThread(threads[i]));
