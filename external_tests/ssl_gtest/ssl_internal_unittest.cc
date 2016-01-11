@@ -5,6 +5,9 @@
 // You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <string.h>
+#ifdef XP_UNIX
+#include <sys/resource.h>
+#endif
 
 #include <memory> // for unique_ptr
 
@@ -20,16 +23,45 @@ extern "C" {
 }
 #include "test_io.h"
 
-#ifdef GTEST_HAS_DEATH_TEST
+namespace nss_test {
+
+// This should be in a library somewhere.
+// It should also have its own tests.
+class SuppressCoreDump {
+public:
+  SuppressCoreDump();
+  ~SuppressCoreDump();
+private:
+#ifdef XP_UNIX
+  struct ::rlimit _saved_limit;
+#endif
+};
+
+#ifdef XP_UNIX
+SuppressCoreDump::SuppressCoreDump() {
+  _saved_limit.rlim_cur = _saved_limit.rlim_max = RLIM_INFINITY;
+  getrlimit(RLIMIT_CORE, &_saved_limit);
+  struct ::rlimit new_limit = _saved_limit;
+  new_limit.rlim_cur = 0;
+  setrlimit(RLIMIT_CORE, &new_limit);
+}
+SuppressCoreDump::~SuppressCoreDump() {
+  setrlimit(RLIMIT_CORE, &_saved_limit);
+}
+#else
+SuppressCoreDump::SuppressCoreDump() { }
+SuppressCoreDump::~SuppressCoreDump() { }
+#endif // XP_UNIX
+
 #ifdef DEBUG
-#define DEBUG_ASSERT_DEATH(stmt, regex) ASSERT_DEATH(stmt, regex)
+#define DEBUG_ASSERT_DEATH(stmt, regex) ASSERT_DEATH_IF_SUPPORTED({ \
+      SuppressCoreDump _coreDumpGuard;                              \
+      stmt;                                                         \
+    }, regex)
 #else
 // Assert that the bad thing doesn't crash by doing it anyway:
 #define DEBUG_ASSERT_DEATH(stmt, regex) stmt
 #endif // DEBUG
-#endif // GTEST_HAS_DEATH_TEST
-
-namespace nss_test {
 
 class InternalSocketTest : public ::testing::Test {
 public:
@@ -139,7 +171,6 @@ TEST(SSL3Random, SmokeTest) {
   EXPECT_NE(0, memcmp(&r0, &r1, SSL3_RANDOM_LENGTH));
 }
 
-#ifdef GTEST_HAS_DEATH_TEST
 typedef InternalSocketTest InternalSocketDeathTest;
 
 TEST_F(InternalSocketDeathTest, DoubleUnlockReader) {
@@ -162,7 +193,6 @@ TEST_F(InternalSocketDeathTest, DoubleUnlock1stHandshake) {
     DEBUG_ASSERT_DEATH(ssl_Release1stHandshakeLock(ss_), "Assertion failure:");
   }
 }
-#endif
 
 TEST_F(InternalKeyPairTest, RefCountSimple) {
   EXPECT_EQ(1, keys_->refCount);
