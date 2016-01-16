@@ -1735,6 +1735,7 @@ extern SECStatus ssl3_CheckSignatureAndHashAlgorithmConsistency(
 extern SECStatus ssl3_ConsumeSignatureAndHashAlgorithm(
     sslSocket *ss, SSL3Opaque **b, PRUint32 *length,
     SSLSignatureAndHashAlg *out);
+extern SECStatus ssl3_GetNewRandom(SSL3Random *random);
 extern SECStatus ssl3_SignHashes(SSL3Hashes *hash, SECKEYPrivateKey *key,
                                  SECItem *buf, PRBool isTLS);
 extern SECStatus ssl3_VerifySignedHashes(SSL3Hashes *hash,
