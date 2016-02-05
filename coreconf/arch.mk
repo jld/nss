@@ -30,6 +30,17 @@ endif
 OS_ARCH := $(subst /,_,$(shell uname -s))
 
 #
+# Set Address Sanitizer prefix
+#
+
+ifeq ($(USE_ASAN), 1)
+	ASAN_TAG=_ASAN
+else
+	ASAN_TAG=
+endif
+
+
+#
 # Attempt to differentiate between sparc and x86 Solaris
 #
 
@@ -262,12 +273,12 @@ OS_CONFIG = $(OS_TARGET)$(OS_RELEASE)
 #
 
 ifdef BUILD_OPT
-    OBJDIR_TAG = $(64BIT_TAG)_OPT
+    OBJDIR_TAG = $(64BIT_TAG)$(ASAN_TAG)_OPT
 else
     ifdef BUILD_IDG
-	OBJDIR_TAG = $(64BIT_TAG)_IDG
+	OBJDIR_TAG = $(64BIT_TAG)$(ASAN_TAG)_IDG
     else
-	OBJDIR_TAG = $(64BIT_TAG)_DBG
+	OBJDIR_TAG = $(64BIT_TAG)$(ASAN_TAG)_DBG
     endif
 endif
 
