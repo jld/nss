@@ -86,6 +86,13 @@ ifdef NS_USE_GCC
 NSPR_COMPILERS = CC=gcc CXX=g++
 endif
 
+ifdef SANITIZER_CFLAGS
+ifdef BUILD_OPT
+NSPR_CONFIGURE_OPTS += --enable-debug-symbols
+endif
+NSPR_COMPILERS += CFLAGS='$(SANITIZER_CFLAGS)' CXXFLAGS='$(SANITIZER_CFLAGS)' LDFLAGS='$(SANITIZER_LFLAGS)'
+endif
+
 #
 # Some pwd commands on Windows (for example, the pwd
 # command in Cygwin) return a pathname that begins
