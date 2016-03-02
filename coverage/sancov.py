@@ -1,12 +1,18 @@
 import os
+import re
 import sys
 import struct
 import subprocess
+import threading
 
 OBJDUMP = "objdump"
 OBJDUMP_DISAS = [OBJDUMP, "--prefix-addresses", "-j", ".text", "-d"]
 PLT_COV_POINT = "<__sanitizer_cov@plt>\n"
 INT_COV_POINT = "<__sanitizer_cov>\n"
+
+ADDR2LINE = "addr2line"
+ADDR2LINE_FLAGS = "-ia"
+DISCRIM_RE = re.compile("^(.*) \(discriminator (\d+)\)$")
 
 def read_sancov_data(blob, into = None, blame = None):
     # TODO: 0xC0BF_FFFF_FFFF_FF{32,64} new-format magic.
@@ -31,41 +37,31 @@ def read_sancov_tree(path, into = None):
                 with open(os.path.join(dirpath, filename)) as f:
                     read_sancov_data(f.read(), into = data[libname], blame = f)
             except Exception as e:
-                print e
+                print(e)
                 continue
     return data
 
 def is_cov_point(line):
     return line.endswith(PLT_COV_POINT) or line.endswith(INT_COV_POINT)
 
-def read_bin_file(path):
+def cov_points(path):
     proc = subprocess.Popen(OBJDUMP_DISAS + [path], stdout = subprocess.PIPE)
-    try:
-        sys.stderr.write("Reading coverage points from %s... " % path)
-        points = set()
-        last_insn_was_cov = False
-        for line in proc.stdout:
-            if last_insn_was_cov:
-                addr = int(line.split(" ", 1)[0], 16)
-                points.add(addr - 1)
-            last_insn_was_cov = is_cov_point(line)
-        sys.stderr.write("done.")
-        return points
-    except Exception:
-        proc.kill()
-        raise
-    finally:
-        sys.stderr.write("\n")
-        proc.communicate()
+    last_insn_was_cov = False
+    for line in proc.stdout:
+        if last_insn_was_cov:
+            addr = int(line.split(" ", 1)[0], 16)
+            yield addr - 1
+        last_insn_was_cov = is_cov_point(line)
+    proc.wait()
 
 def is_elf_file(path):
     if os.path.isfile(path):
         with open(path) as f:
             return f.read(4) == "\x7FELF"
 
-def read_bin_tree(path):
+def read_bin_tree(rootpath):
     bins = dict()
-    for (dirpath, subdirnames, filenames) in os.walk(path):
+    for (dirpath, subdirnames, filenames) in os.walk(rootpath):
         for filename in filenames:
             filepath = os.path.join(dirpath, filename)
             if not is_elf_file(filepath):
@@ -73,8 +69,51 @@ def read_bin_tree(path):
             if filename in bins:
                 # FIXME: warn or something? could be same file multiply linked
                 continue
-            bins[filename] = read_bin_file(filepath)
+            sys.stderr.write("Processing %s... " % filepath)
+            # FIXME: parallelize with futures
+            bins[filename] = addr2line(filepath, cov_points(filepath))
+            sys.stderr.write("done.\n")
     return bins
 
-if __name__ == '__main__':
-    print read_sancov_tree(sys.argv[1])
+def addr2line(path, addr_iter):
+    def write_addrs(outfd):
+        for addr in addr_iter:
+            outfd.write("0x%x\n" % addr)
+            outfd.flush()
+        outfd.close()
+
+    proc = subprocess.Popen([ADDR2LINE, ADDR2LINE_FLAGS, "-e", path],
+                            stdin = subprocess.PIPE,
+                            stdout = subprocess.PIPE)
+    stdin_thread = threading.Thread(target = write_addrs,
+                                    args = (proc.stdin,))
+    stdin_thread.start()
+
+    info = dict()
+    addr = None
+    for outline in proc.stdout:
+        outline = outline.rstrip()
+        if outline.startswith("0x") and ":" not in outline:
+            addr = int(outline, 16)
+            continue
+        assert addr is not None
+       
+        if outline.endswith(")"):
+            (outline, disc) = outline[:-1].rsplit(" (discriminator", 1)
+            disc = int(disc)
+        else:
+            disc = 0
+
+        (path, lineno) = outline.rsplit(":", 1)
+        if lineno == "?":
+            lineno = "0"
+        lineno = int(lineno)
+        record = (intern(path), lineno, disc)
+        if addr in info:
+            info[addr].append(record)
+        else:
+            info[addr] = [record]
+    stdin_thread.join()
+    proc.wait()
+
+    return info
