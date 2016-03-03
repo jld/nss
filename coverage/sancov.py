@@ -89,12 +89,15 @@ def read_bin_tree(rootpath):
             srcpath = realpath(srcpath)
             srcinfo = info.get(srcpath, None)
             if not srcinfo:
-                srcinfo = dict()
+                srcinfo = list()
                 info[srcpath] = srcinfo
-            if (lineno, disc) in srcinfo:
-                srcinfo[(lineno, disc)].append((filename, addr))
+            while lineno >= len(srcinfo):
+                srcinfo.append(dict())
+            lineinfo = srcinfo[lineno]
+            if disc in lineinfo:
+                lineinfo[disc].append((filename, addr))
             else:
-                srcinfo[(lineno, disc)] = [(filename, addr)]
+                lineinfo[disc] = [(filename, addr)]
         sys.stderr.write("Done: %s\n" % filepath)
 
     bins = set()
