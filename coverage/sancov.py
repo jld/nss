@@ -79,12 +79,14 @@ def is_elf_file(path):
             return f.read(4) == b"\x7FELF"
 
 def read_bin_tree(rootpath):
+    realpath = realpath_cache()
     bins = dict()
     def do_the_thing(filename, filepath):
         sys.stderr.write("Processing: %s\n" % filepath)
         info = dict()
         gen = addr2line(filepath, cov_points(filepath))
         for (addr, srcpath, lineno, disc) in gen:
+            srcpath = realpath(srcpath)
             record = (srcpath, lineno, disc)
             if addr in info:
                 info[addr].append(record)
@@ -140,3 +142,13 @@ def addr2line(path, addr_iter):
         yield (addr, path, lineno, disc)
     stdin_thread.join()
     proc.wait()
+
+def realpath_cache():
+    cache = {}
+    def realpath(path):
+        real = cache.get(path, None)
+        if not real:
+            real = os.path.realpath(path)
+            cache[path] = real
+        return real
+    return realpath
