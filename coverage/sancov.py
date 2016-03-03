@@ -30,7 +30,7 @@ PLT_COV_POINT = b"<__sanitizer_cov@plt>\n"
 INT_COV_POINT = b"<__sanitizer_cov>\n"
 
 ADDR2LINE = "addr2line"
-ADDR2LINE_FLAGS = "-ia"
+ADDR2LINE_FLAGS = "-a"
 DISCRIM_RE = re.compile("^(.*) \(discriminator (\d+)\)$")
 
 def read_sancov_data(blob, into = None, blame = None):
@@ -160,3 +160,37 @@ def realpath_cache():
             cache[path] = real
         return real
     return realpath
+
+def annotate(bundle, path, hits, out = sys.stdout):
+    lines = bundle[path]
+    maxline = len(lines) - 1
+    maxdisc = max(len(points) for points in lines)
+    fmt = "%%-%ds %%%dd %%s" % (maxdisc + 2, len(str(maxline)))
+
+    def cov_str(lineinfo):
+        if not lineinfo:
+            return ""
+        buf = "["
+        for disc in sorted(lineinfo):
+            places = lineinfo[disc]
+            if any(addr in hits.get(binfile, ()) for (binfile, addr) in places):
+                buf += "#"
+            else:
+                buf += "."
+        buf += "]"
+        return buf
+
+    def handle_line(lineno, srcline):
+        if lineno < len(lines):
+            lineinfo = lines[lineno]
+        else:
+            lineinfo = None
+        out.write(fmt % (cov_str(lineinfo), lineno, srcline))
+
+    if lines[0]:
+        handle_line(0, "")
+    lineno = 1
+    with open(path) as f:
+        for srcline in f:
+            handle_line(lineno, srcline)
+            lineno += 1
