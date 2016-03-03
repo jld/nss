@@ -82,7 +82,15 @@ def read_bin_tree(rootpath):
     bins = dict()
     def do_the_thing(filename, filepath):
         sys.stderr.write("Processing: %s\n" % filepath)
-        bins[filename] = addr2line(filepath, cov_points(filepath))
+        info = dict()
+        gen = addr2line(filepath, cov_points(filepath))
+        for (addr, srcpath, lineno, disc) in gen:
+            record = (srcpath, lineno, disc)
+            if addr in info:
+                info[addr].append(record)
+            else:
+                info[addr] = [record]        
+        bins[filename] = info
         sys.stderr.write("Done: %s\n" % filepath)
     with ThreadPoolExecutor(cpu_count() or 1) as e:
         for (dirpath, subdirnames, filenames) in os.walk(rootpath):
@@ -111,7 +119,6 @@ def addr2line(path, addr_iter):
                                     args = (proc.stdin,))
     stdin_thread.start()
 
-    info = dict()
     addr = None
     for outline in proc.stdout:
         outline = outline.rstrip()
@@ -130,12 +137,6 @@ def addr2line(path, addr_iter):
         if lineno == b"?":
             lineno = b"0"
         lineno = int(lineno)
-        record = (path, lineno, disc)
-        if addr in info:
-            info[addr].append(record)
-        else:
-            info[addr] = [record]
+        yield (addr, path, lineno, disc)
     stdin_thread.join()
     proc.wait()
-
-    return info
