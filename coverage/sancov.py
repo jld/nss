@@ -80,20 +80,24 @@ def is_elf_file(path):
 
 def read_bin_tree(rootpath):
     realpath = realpath_cache()
-    bins = dict()
+    info = dict()
+
     def do_the_thing(filename, filepath):
         sys.stderr.write("Processing: %s\n" % filepath)
-        info = dict()
         gen = addr2line(filepath, cov_points(filepath))
         for (addr, srcpath, lineno, disc) in gen:
             srcpath = realpath(srcpath)
-            record = (srcpath, lineno, disc)
-            if addr in info:
-                info[addr].append(record)
+            srcinfo = info.get(srcpath, None)
+            if not srcinfo:
+                srcinfo = dict()
+                info[srcpath] = srcinfo
+            if (lineno, disc) in srcinfo:
+                srcinfo[(lineno, disc)].append((filename, addr))
             else:
-                info[addr] = [record]        
-        bins[filename] = info
+                srcinfo[(lineno, disc)] = [(filename, addr)]
         sys.stderr.write("Done: %s\n" % filepath)
+
+    bins = set()
     with ThreadPoolExecutor(cpu_count() or 1) as e:
         for (dirpath, subdirnames, filenames) in os.walk(rootpath):
             for filename in filenames:
@@ -104,8 +108,9 @@ def read_bin_tree(rootpath):
                     # FIXME: warn or something?
                     # could be same file multiply linked
                     continue
+                bins.add(filename)
                 e.submit(do_the_thing, filename, filepath)
-    return bins
+    return info
 
 def addr2line(path, addr_iter):
     def write_addrs(outfd):
@@ -128,7 +133,7 @@ def addr2line(path, addr_iter):
             addr = int(outline, 16)
             continue
         assert addr is not None
-       
+
         if outline.endswith(b")"):
             (outline, disc) = outline[:-1].rsplit(b" (discriminator", 1)
             disc = int(disc)
