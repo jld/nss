@@ -5,10 +5,29 @@ import struct
 import subprocess
 import threading
 
+try:
+    from concurrent.futures import ThreadPoolExecutor
+except ImportError:
+    class ThreadPoolExecutor:
+        def __init__(self, max_workers = None):
+            pass
+        def submit(self, fn, *args, **kwargs):
+            fn(*args, **kwargs)
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+try:
+    from os import cpu_count
+except ImportError:
+    def cpu_count():
+        return None
+
 OBJDUMP = "objdump"
 OBJDUMP_DISAS = [OBJDUMP, "--prefix-addresses", "-j", ".text", "-d"]
-PLT_COV_POINT = "<__sanitizer_cov@plt>\n"
-INT_COV_POINT = "<__sanitizer_cov>\n"
+PLT_COV_POINT = b"<__sanitizer_cov@plt>\n"
+INT_COV_POINT = b"<__sanitizer_cov>\n"
 
 ADDR2LINE = "addr2line"
 ADDR2LINE_FLAGS = "-ia"
@@ -49,36 +68,39 @@ def cov_points(path):
     last_insn_was_cov = False
     for line in proc.stdout:
         if last_insn_was_cov:
-            addr = int(line.split(" ", 1)[0], 16)
+            addr = int(line.split(b" ", 1)[0], 16)
             yield addr - 1
         last_insn_was_cov = is_cov_point(line)
     proc.wait()
 
 def is_elf_file(path):
     if os.path.isfile(path):
-        with open(path) as f:
-            return f.read(4) == "\x7FELF"
+        with open(path, "rb") as f:
+            return f.read(4) == b"\x7FELF"
 
 def read_bin_tree(rootpath):
     bins = dict()
-    for (dirpath, subdirnames, filenames) in os.walk(rootpath):
-        for filename in filenames:
-            filepath = os.path.join(dirpath, filename)
-            if not is_elf_file(filepath):
-                continue
-            if filename in bins:
-                # FIXME: warn or something? could be same file multiply linked
-                continue
-            sys.stderr.write("Processing %s... " % filepath)
-            # FIXME: parallelize with futures
-            bins[filename] = addr2line(filepath, cov_points(filepath))
-            sys.stderr.write("done.\n")
+    def do_the_thing(filename, filepath):
+        sys.stderr.write("Processing: %s\n" % filepath)
+        bins[filename] = addr2line(filepath, cov_points(filepath))
+        sys.stderr.write("Done: %s\n" % filepath)
+    with ThreadPoolExecutor(cpu_count() or 1) as e:
+        for (dirpath, subdirnames, filenames) in os.walk(rootpath):
+            for filename in filenames:
+                filepath = os.path.join(dirpath, filename)
+                if not is_elf_file(filepath):
+                    continue
+                if filename in bins:
+                    # FIXME: warn or something?
+                    # could be same file multiply linked
+                    continue
+                e.submit(do_the_thing, filename, filepath)
     return bins
 
 def addr2line(path, addr_iter):
     def write_addrs(outfd):
         for addr in addr_iter:
-            outfd.write("0x%x\n" % addr)
+            outfd.write(("0x%x\n" % addr).encode())
             outfd.flush()
         outfd.close()
 
@@ -93,22 +115,22 @@ def addr2line(path, addr_iter):
     addr = None
     for outline in proc.stdout:
         outline = outline.rstrip()
-        if outline.startswith("0x") and ":" not in outline:
+        if outline.startswith(b"0x") and b":" not in outline:
             addr = int(outline, 16)
             continue
         assert addr is not None
        
-        if outline.endswith(")"):
-            (outline, disc) = outline[:-1].rsplit(" (discriminator", 1)
+        if outline.endswith(b")"):
+            (outline, disc) = outline[:-1].rsplit(b" (discriminator", 1)
             disc = int(disc)
         else:
             disc = 0
 
-        (path, lineno) = outline.rsplit(":", 1)
-        if lineno == "?":
-            lineno = "0"
+        (path, lineno) = outline.rsplit(b":", 1)
+        if lineno == b"?":
+            lineno = b"0"
         lineno = int(lineno)
-        record = (intern(path), lineno, disc)
+        record = (path, lineno, disc)
         if addr in info:
             info[addr].append(record)
         else:
