@@ -8,6 +8,7 @@
 
 #include "gtest/gtest.h"
 
+#include <stdint.h>
 #include <string>
 #include <string.h>
 #include <netinet/in.h>
@@ -18,22 +19,22 @@ namespace nss_test {
 // passing by value isn't a problem.
 
 struct Ucs4Case {
-  PRUint32 c;
+  uint32_t c;
   const char *utf8;
 };
 
 struct Ucs2Case {
-  PRUint16 c;
+  uint16_t c;
   const char *utf8;
 };
 
 struct Utf16Case {
-  PRUint32 c;
-  PRUint16 w[2];
+  uint32_t c;
+  uint16_t w[2];
 };
 
 struct Utf16BadCase {
-  PRUint16 w[3];
+  uint16_t w[3];
 };
 
 // UCS-4 <-> UTF-8 cases
@@ -727,7 +728,7 @@ class Ucs4Test : public ::testing::TestWithParam<Ucs4Case> {
 };
 
 TEST_P(Ucs4Test, ToUtf8) {
-  PRUint32 nc;
+  uint32_t nc;
   unsigned char utf8[8];
   unsigned int len = 0;
   PRBool result;
@@ -746,7 +747,7 @@ TEST_P(Ucs4Test, ToUtf8) {
 }
 
 TEST_P(Ucs4Test, FromUtf8) {
-  PRUint32 nc;
+  uint32_t nc;
   unsigned int len = 0;
   PRBool result;
   const Ucs4Case testCase = GetParam();
@@ -761,7 +762,7 @@ TEST_P(Ucs4Test, FromUtf8) {
 }
 
 TEST_P(Ucs4Test, DestTooSmall) {
-  PRUint32 nc;
+  uint32_t nc;
   unsigned char utf8[8];
   unsigned char *utf8end = utf8 + sizeof(utf8);
   unsigned int len = 0;
@@ -789,7 +790,7 @@ class Ucs2Test : public ::testing::TestWithParam<Ucs2Case> {
 };
 
 TEST_P(Ucs2Test, ToUtf8) {
-  PRUint16 nc;
+  uint16_t nc;
   unsigned char utf8[8];
   unsigned int len = 0;
   PRBool result;
@@ -808,7 +809,7 @@ TEST_P(Ucs2Test, ToUtf8) {
 }
 
 TEST_P(Ucs2Test, FromUtf8) {
-  PRUint16 nc;
+  uint16_t nc;
   unsigned int len = 0;
   PRBool result;
   const Ucs2Case testCase = GetParam();
@@ -823,7 +824,7 @@ TEST_P(Ucs2Test, FromUtf8) {
 }
 
 TEST_P(Ucs2Test, DestTooSmall) {
-  PRUint16 nc;
+  uint16_t nc;
   unsigned char utf8[8];
   unsigned char *utf8end = utf8 + sizeof(utf8);
   unsigned int len = 0;
@@ -852,8 +853,8 @@ class Utf16Test : public ::testing::TestWithParam<Utf16Case> {
 };
 
 TEST_P(Utf16Test, From16To32) {
-  PRUint16 from[2];
-  PRUint32 to;
+  uint16_t from[2];
+  uint32_t to;
   unsigned char utf8[8];
   unsigned int len = 0;
   PRBool result;
@@ -875,8 +876,8 @@ TEST_P(Utf16Test, From16To32) {
 }
 
 TEST_P(Utf16Test, From32To16) {
-  PRUint32 from;
-  PRUint16 to[2];
+  uint32_t from;
+  uint16_t to[2];
   unsigned char utf8[8];
   unsigned int len = 0;
   PRBool result;
@@ -899,8 +900,8 @@ TEST_P(Utf16Test, From32To16) {
 }
 
 TEST_P(Utf16Test, SameUtf8) {
-  PRUint32 from32;
-  PRUint16 from16[2];
+  uint32_t from32;
+  uint16_t from16[2];
   unsigned char utf8from32[8];
   unsigned char utf8from16[8];
   unsigned int lenFrom32 = 0;
@@ -986,7 +987,7 @@ TEST_P(BadUtf16Test, HasNoUtf8) {
   }
 
   result = sec_port_ucs2_utf8_conversion_function(PR_FALSE,
-    (unsigned char *)srcBuf.w, srcLen * sizeof(PRUint16),
+    (unsigned char *)srcBuf.w, srcLen * sizeof(uint16_t),
     destBuf, sizeof(destBuf), &len);
 
   EXPECT_EQ(result, PR_FALSE);
@@ -1009,7 +1010,7 @@ TEST_P(Iso88591Test, ToUtf8) {
 
   memset(utf8, 0, sizeof(utf8));
   iso88591 = testCase.c;
-  ASSERT_EQ(testCase.c, (PRUint16)iso88591);
+  ASSERT_EQ(testCase.c, (uint16_t)iso88591);
 
   result = sec_port_iso88591_utf8_conversion_function(&iso88591,
     1, utf8, sizeof(utf8), &len);
@@ -1029,7 +1030,7 @@ INSTANTIATE_TEST_CASE_P(Iso88591TestCases, Iso88591Test,
 TEST(Utf8Zeroes, From32To8) {
   PRBool result;
   unsigned int len;
-  PRUint32 from = 0;
+  uint32_t from = 0;
   unsigned char to;
 
   result = sec_port_ucs4_utf8_conversion_function(PR_FALSE,
@@ -1043,7 +1044,7 @@ TEST(Utf8Zeroes, From32To8) {
 TEST(Utf8Zeroes, From16To8) {
   PRBool result;
   unsigned int len;
-  PRUint16 from = 0;
+  uint16_t from = 0;
   unsigned char to;
 
   result = sec_port_ucs2_utf8_conversion_function(PR_FALSE,
@@ -1058,7 +1059,7 @@ TEST(Utf8Zeroes, From8To32) {
   PRBool result;
   unsigned int len;
   unsigned char from = 0;
-  PRUint32 to;
+  uint32_t to;
 
   result = sec_port_ucs4_utf8_conversion_function(PR_TRUE,
     &from, sizeof(from), (unsigned char *)&to, sizeof(to), &len);
@@ -1072,7 +1073,7 @@ TEST(Utf8Zeroes, From8To16) {
   PRBool result;
   unsigned int len;
   unsigned char from = 0;
-  PRUint16 to;
+  uint16_t to;
 
   result = sec_port_ucs2_utf8_conversion_function(PR_TRUE,
     &from, sizeof(from), (unsigned char *)&to, sizeof(to), &len);
