@@ -86,6 +86,9 @@ def read_bin_tree(rootpath):
         sys.stderr.write("Processing: %s\n" % filepath)
         gen = addr2line(filepath, cov_points(filepath))
         for (addr, srcpath, lineno, disc) in gen:
+            if not srcpath:
+                # __clang_call_terminate is located at ":?", apparently
+                continue
             srcpath = realpath(srcpath)
             srcinfo = info.get(srcpath, None)
             if not srcinfo:
@@ -161,7 +164,7 @@ def realpath_cache():
         return real
     return realpath
 
-def annotate(bundle, path, hits, out = sys.stdout):
+def annotate(bundle, hits, path, out = sys.stdout):
     lines = bundle[path]
     maxline = len(lines) - 1
     maxdisc = max(len(points) for points in lines)
@@ -194,3 +197,28 @@ def annotate(bundle, path, hits, out = sys.stdout):
         for srcline in f:
             handle_line(lineno, srcline)
             lineno += 1
+
+def ancestors(path):
+    while path != "":
+        yield path
+        (dirpath, component) = os.path.split(path)
+        assert component != os.pardir
+        if path == dirpath:
+            break
+        path = dirpath
+
+def annotate_tree(bundle, hits, srcroot, dstroot):
+    srcroot = os.path.realpath(srcroot)
+    for srcfile in bundle:
+        if not srcroot in ancestors(srcfile):
+            continue
+        relfile = os.path.relpath(srcfile, srcroot)
+        dstfile = os.path.join(dstroot, relfile + b".cov.txt")
+        dstdir = os.path.dirname(dstfile)
+        if not os.path.exists(dstdir):
+            os.makedirs(dstdir)
+        try:
+            with open(dstfile, "w") as f:
+                annotate(bundle, hits, srcfile, out = f)
+        except FileNotFoundError as e:
+            sys.stderr.write(str(e) + "\n")
