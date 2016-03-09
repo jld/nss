@@ -29,10 +29,6 @@ include ../common/gtest.mk
 
 CFLAGS += -I$(CORE_DEPTH)/lib/util
 
-ifdef NSS_SSL_ENABLE_ZLIB
-include $(CORE_DEPTH)/coreconf/zlib.mk
-endif
-
 #######################################################################
 # (5) Execute "global" rules. (OPTIONAL)                              #
 #######################################################################
