@@ -33,14 +33,21 @@ ADDR2LINE = "addr2line"
 ADDR2LINE_FLAGS = "-a"
 DISCRIM_RE = re.compile("^(.*) \(discriminator (\d+)\)$")
 
+MAGIC32 = struct.pack("=Q", 0xC0BFFFFFFFFFFF32)
+MAGIC64 = struct.pack("=Q", 0xC0BFFFFFFFFFFF64)
+# FIXME: cross-endian support?
+
 def read_sancov_data(blob, into = None, blame = None):
-    # TODO: 0xC0BF_FFFF_FFFF_FF{32,64} new-format magic.
-    nbyte = len(blob)
-    if (nbyte % 4) != 0:
-        # FIXME: exception types
-        raise Exception("length %d not divisible by 4" % l)
+    if blob.startswith(MAGIC32):
+        blob = blob[8:]
+        fmt = "=%dL" % (len(blob) / 4)
+    elif blob.startswith(MAGIC64):
+        blob = blob[8:]
+        fmt = "=%dQ" % (len(blob) / 8)
+    else:
+        fmt = "=%dL" % (len(blob) / 4)
     offsets = into if into is not None else set()
-    offsets.update(struct.unpack("=%dL" % (nbyte / 4), blob))
+    offsets.update(struct.unpack(fmt, blob))
     return offsets
 
 def read_sancov_tree(path, into = None):
