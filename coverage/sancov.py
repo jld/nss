@@ -60,7 +60,7 @@ def read_sancov_tree(path, into = None):
             if libname not in data:
                 data[libname] = set()
             try:
-                with open(os.path.join(dirpath, filename)) as f:
+                with open(os.path.join(dirpath, filename), "rb") as f:
                     read_sancov_data(f.read(), into = data[libname], blame = f)
             except Exception as e:
                 print(e)
