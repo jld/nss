@@ -198,7 +198,7 @@ def annotate(bundle, hits, path, out = sys.stdout):
         out.write(fmt % (cov_str(lineinfo), lineno, srcline))
 
     if lines[0]:
-        handle_line(0, "")
+        handle_line(0, "\n")
     lineno = 1
     with open(path) as f:
         for srcline in f:
