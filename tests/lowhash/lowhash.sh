@@ -40,7 +40,7 @@ lowhash_init()
       cd ../common
       . ./init.sh
   fi
-  LOWHASHDIR=../lowhash
+  LOWHASHDIR=${HOSTDIR}/lowhash
   mkdir -p ${LOWHASHDIR}
   if [ -f /proc/sys/crypto/fips_enabled ]; then
     FVAL=`cat /proc/sys/crypto/fips_enabled`
