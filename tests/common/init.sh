@@ -656,8 +656,16 @@ if [ -z "${INIT_SOURCED}" -o "${INIT_SOURCED}" != "TRUE" ]; then
     fi
 
     # If using ASan, disable LSan; see bug 1246801.
-    ASAN_OPTIONS="detect_leaks=0${ASAN_OPTIONS:+:$ASAN_OPTIONS}"
-    export ASAN_OPTIONS
+    BASE_ASAN_OPTIONS="detect_leaks=0:${ASAN_OPTIONS}"
+    BASE_SANCOV_DIR="${HOSTDIR}/coverage"
+    set_sancov_dir()
+    {
+	SANCOV_DIR="${BASE_SANCOV_DIR}${1:+/$1}"
+        mkdir -p "${SANCOV_DIR}" || exit
+        ASAN_OPTIONS="${BASE_ASAN_OPTIONS}:coverage_dir=${SANCOV_DIR}"
+        export ASAN_OPTIONS
+    }
+    set_sancov_dir
 
     SCRIPTNAME=$0
     INIT_SOURCED=TRUE   #whatever one does - NEVER export this one please

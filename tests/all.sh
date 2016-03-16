@@ -125,7 +125,11 @@ run_tests()
         SCRIPTNAME=${TEST}.sh
         echo "Running tests for ${TEST}"
         echo "TIMESTAMP ${TEST} BEGIN: `date`"
-        (cd ${QADIR}/${TEST}; . ./${SCRIPTNAME} 2>&1)
+        (
+            cd ${QADIR}/${TEST}
+            set_sancov_dir "${CYCLE:?}/${TEST}"
+            . ./${SCRIPTNAME} 2>&1
+        )
         echo "TIMESTAMP ${TEST} END: `date`"
     done
 }
