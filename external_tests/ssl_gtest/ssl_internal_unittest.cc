@@ -18,9 +18,7 @@
 #include "scoped_ptrs.h"
 #include "ssl.h"
 #include "sslerr.h"
-extern "C" {
 #include "sslimpl.h"
-}
 #include "test_io.h"
 
 namespace nss_test {
