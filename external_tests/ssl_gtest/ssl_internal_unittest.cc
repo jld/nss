@@ -209,7 +209,7 @@ TEST_F(InternalKeyPairTest, RefCountThreaded) {
     }
   });
 
-  ASSERT_EQ(1 + numThreads * iterations, size_t(keys->refCount));
+  ASSERT_EQ(1 + numThreads * iterations, static_cast<size_t>(keys->refCount));
 
   RunOnThreads(numThreads, [=]{
     for (size_t i = 0; i < iterations; ++i) {
