@@ -10,6 +10,7 @@
 #include "cert.h"
 #include "keyhi.h"
 #include "pk11pub.h"
+#include "prio.h"
 
 namespace nss_test {
 
@@ -24,6 +25,7 @@ struct ScopedDelete {
   void operator()(SECItem* item) { SECITEM_FreeItem(item, true); }
   void operator()(SECKEYPublicKey* key) { SECKEY_DestroyPublicKey(key); }
   void operator()(SECKEYPrivateKey* key) { SECKEY_DestroyPrivateKey(key); }
+  void operator()(PRFileDesc* fd) { PR_Close(fd); }
 };
 
 template<class T>
@@ -41,6 +43,7 @@ SCOPED(SECAlgorithmID);
 SCOPED(SECItem);
 SCOPED(SECKEYPublicKey);
 SCOPED(SECKEYPrivateKey);
+SCOPED(PRFileDesc);
 
 #undef SCOPED
 

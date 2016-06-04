@@ -23,6 +23,15 @@
 
 namespace nss_test {
 
+struct ScopedMaybeDeleteKeyPair {
+  void operator()(ssl3KeyPair* ptr) {
+    if (ptr) {
+      ssl3_FreeKeyPair(ptr);
+    }
+  }
+};
+typedef std::unique_ptr<ssl3KeyPair, ScopedMaybeDeleteKeyPair> ScopedKeyPair;
+
 // FIXME, bug 1243238: move this into a common location.
 class SuppressCoreDump {
 public:
@@ -63,33 +72,25 @@ SuppressCoreDump::~SuppressCoreDump() { }
 class InternalSocketTest : public ::testing::Test {
 public:
   InternalSocketTest() : fd_(nullptr), ss_(nullptr) { }
-  ~InternalSocketTest() {
-    if (fd_) {
-      PR_Close(fd_);
-    }
-  }
+  ~InternalSocketTest() { }
 
   void SetUp() {
-    fd_ = DummyPrSocket::CreateFD("fake", STREAM);
+    fd_.reset(DummyPrSocket::CreateFD("fake", STREAM));
     ASSERT_NE(nullptr, fd_);
-    ASSERT_EQ(fd_, SSL_ImportFD(nullptr, fd_));
-    ss_ = ssl_FindSocket(fd_);
+    ASSERT_EQ(fd_.get(), SSL_ImportFD(nullptr, fd_.get()));
+    ss_ = ssl_FindSocket(fd_.get());
     ASSERT_NE(nullptr, ss_);
   }
 
 protected:
-  PRFileDesc *fd_;
-  sslSocket *ss_;
+  ScopedPRFileDesc fd_;
+  sslSocket *ss_; // The sslSocket is owned by the PRFileDesc.
 };
 
 class InternalKeyPairTest : public ::testing::Test {
 public:
   InternalKeyPairTest() : keys_(nullptr) { }
-  ~InternalKeyPairTest() {
-    if (keys_) {
-      ssl3_FreeKeyPair(keys_);
-    }
-  }
+  ~InternalKeyPairTest() { }
 
   void SetUp() {
     static const ECName curve = ec_secp256r1;
@@ -101,24 +102,25 @@ public:
               ssl3_ECName2Params(nullptr, // no arena
                                  curve, ecParams.get()));
     EXPECT_NE(nullptr, ecParams->data);
-    EXPECT_NE(0, ecParams->len);
+    EXPECT_NE(0U, ecParams->len);
 
 
     SECKEYPublicKey *tmpPubKey;
     ScopedSECKEYPrivateKey
-      privKey(SECKEY_CreateECPrivateKey(ecParams.get(), &tmpPubKey,
+      privKey(SECKEY_CreateECPrivateKey(ecParams.get(),
+                                        &tmpPubKey,
                                         nullptr)); // no UI context
     ScopedSECKEYPublicKey pubKey(tmpPubKey);
 
     ASSERT_TRUE(privKey);
     ASSERT_TRUE(pubKey);
 
-    keys_ = ssl3_NewKeyPair(privKey.release(), pubKey.release());
+    keys_.reset(ssl3_NewKeyPair(privKey.release(), pubKey.release()));
     ASSERT_TRUE(keys_);
   }
 
 protected:
-  ssl3KeyPair *keys_;
+  ScopedKeyPair keys_;
 };
 
 template<class F>
@@ -155,7 +157,7 @@ TEST(SSL3Random, SmokeTest) {
   // ssl3_GetNewRandom uses the "rand" field, but other code memcpy()s
   // the first SSL3_RANDOM_LENGTH bytes, so make sure that does what's
   // expected:
-  ASSERT_LE(SSL3_RANDOM_LENGTH, sizeof(SSL3Random));
+  ASSERT_LE(static_cast<size_t>(SSL3_RANDOM_LENGTH), sizeof(SSL3Random));
   ASSERT_EQ(static_cast<void*>(&r0), static_cast<void*>(r0.rand));
 
   // Check that two successive random numbers aren't equal.  This is
@@ -190,16 +192,16 @@ TEST_F(InternalSocketDeathTest, DoubleUnlock1stHandshake) {
 
 TEST_F(InternalKeyPairTest, RefCountSimple) {
   EXPECT_EQ(1, keys_->refCount);
-  EXPECT_EQ(keys_, ssl3_GetKeyPairRef(keys_));
+  EXPECT_EQ(keys_.get(), ssl3_GetKeyPairRef(keys_.get()));
   EXPECT_EQ(2, keys_->refCount);
-  ssl3_FreeKeyPair(keys_);
+  ssl3_FreeKeyPair(keys_.get());
   EXPECT_EQ(1, keys_->refCount);
 }
 
 TEST_F(InternalKeyPairTest, RefCountThreaded) {
   static const size_t numThreads = 5;
   static const size_t iterations = 1000000;
-  ssl3KeyPair *const keys = keys_;
+  ssl3KeyPair *const keys = keys_.get();
 
   RunOnThreads(numThreads, [=]{
     for (size_t i = 0; i < iterations; ++i) {
@@ -207,7 +209,7 @@ TEST_F(InternalKeyPairTest, RefCountThreaded) {
     }
   });
 
-  ASSERT_EQ(1 + numThreads * iterations, size_t(keys_->refCount));
+  ASSERT_EQ(1 + numThreads * iterations, size_t(keys->refCount));
 
   RunOnThreads(numThreads, [=]{
     for (size_t i = 0; i < iterations; ++i) {
@@ -215,7 +217,7 @@ TEST_F(InternalKeyPairTest, RefCountThreaded) {
     }
   });
 
-  EXPECT_EQ(1, keys_->refCount);
+  EXPECT_EQ(1, keys->refCount);
 }
 
 } // namespace nss_test
