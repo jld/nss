@@ -93,13 +93,9 @@ public:
 
   void SetUp() {
     static const ECName curve = ec_secp256r1;
-    ScopedSECItem ecParams;
-    ScopedSECKEYPrivateKey privKey;
-    ScopedSECKEYPublicKey pubKey;
-
-    ecParams.reset(SECITEM_AllocItem(nullptr, // no arena
-                                     nullptr, // not reallocating
-                                     0));     // length
+    ScopedSECItem ecParams(SECITEM_AllocItem(nullptr, // no arena
+                                             nullptr, // not reallocating
+                                             0));     // length
     ASSERT_TRUE(ecParams);
     ASSERT_EQ(SECSuccess,
               ssl3_ECName2Params(nullptr, // no arena
@@ -107,10 +103,12 @@ public:
     EXPECT_NE(nullptr, ecParams->data);
     EXPECT_NE(0, ecParams->len);
 
+
     SECKEYPublicKey *tmpPubKey;
-    privKey.reset(SECKEY_CreateECPrivateKey(ecParams.get(), &tmpPubKey,
-                                            nullptr)); // no UI context
-    pubKey.reset(tmpPubKey);
+    ScopedSECKEYPrivateKey
+      privKey(SECKEY_CreateECPrivateKey(ecParams.get(), &tmpPubKey,
+                                        nullptr)); // no UI context
+    ScopedSECKEYPublicKey pubKey(tmpPubKey);
 
     ASSERT_TRUE(privKey);
     ASSERT_TRUE(pubKey);
