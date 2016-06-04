@@ -131,12 +131,12 @@ ThreadFunctionalMain(void *vp) {
 
 template<class F>
 static void
-RunOnThreads(size_t n, const F& func)
+RunOnThreads(size_t numThreads, const F& func)
 {
   void* vp = const_cast<void*>(static_cast<const void*>(&func));
-  std::unique_ptr<PRThread*[]> threads(new PRThread*[n]);
+  std::unique_ptr<PRThread*[]> threads(new PRThread*[numThreads]);
 
-  for (size_t i = 0; i < n; ++i) {
+  for (size_t i = 0; i < numThreads; ++i) {
     threads[i] = PR_CreateThread(PR_SYSTEM_THREAD,
                                  ThreadFunctionalMain<F>,
                                  vp,
@@ -146,7 +146,7 @@ RunOnThreads(size_t n, const F& func)
                                  0); // use default stack size
     ASSERT_NE(nullptr, threads[i]);
   }
-  for (size_t i = 0; i < n; ++i) {
+  for (size_t i = 0; i < numThreads; ++i) {
     EXPECT_EQ(PR_SUCCESS, PR_JoinThread(threads[i]));
   }
 }
