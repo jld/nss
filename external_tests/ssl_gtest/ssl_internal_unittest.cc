@@ -107,12 +107,11 @@ public:
     EXPECT_NE(nullptr, ecParams->data);
     EXPECT_NE(0, ecParams->len);
 
-    {
-      SECKEYPublicKey *tmpPubKey;
-      privKey.reset(SECKEY_CreateECPrivateKey(ecParams.get(), &tmpPubKey,
-                                              nullptr)); // no UI context
-      pubKey.reset(tmpPubKey);
-    }
+    SECKEYPublicKey *tmpPubKey;
+    privKey.reset(SECKEY_CreateECPrivateKey(ecParams.get(), &tmpPubKey,
+                                            nullptr)); // no UI context
+    pubKey.reset(tmpPubKey);
+
     ASSERT_TRUE(privKey);
     ASSERT_TRUE(pubKey);
 
