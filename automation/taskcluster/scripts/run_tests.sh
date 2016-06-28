@@ -17,11 +17,26 @@ if [ $(id -u) = 0 ]; then
     exec su worker $0
 fi
 
-# Fetch artifact if needed.
+# Fetch artifact(s) if needed.
 if [ ! -d "dist" ]; then
-    curl --retry 3 -Lo dist.tar.bz2 https://queue.taskcluster.net/v1/task/$TC_PARENT_TASK_ID/artifacts/public/dist.tar.bz2
-    tar xvjf dist.tar.bz2
+    # FIXME: remove this before upstreaming.
+    TC_BASE=${TASKCLUSTER_BASE:-https://queue.taskcluster.net/v1/task}
+    artifacts=dist.tar.bz2
+    if [ -n "$USE_GCOV" ]; then
+        artifacts="$artifacts gcno.tar.bz2"
+    fi
+    for file in $artifacts; do
+        curl --retry 3 -Lo $file \
+            $TC_BASE/$TC_PARENT_TASK_ID/artifacts/public/$file
+        tar xvjf $file
+    done
 fi
 
 # Run tests.
 cd nss/tests && ./all.sh
+
+# Export coverage data.
+cd && mkdir artifacts
+if [ -n "$USE_GCOV" ]; then
+    lcov --capture --directory nss | bzip2 > artifacts/lcov.info.bz2
+fi
