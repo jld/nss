@@ -35,5 +35,6 @@ tar cvfjh artifacts/dist.tar.bz2 dist tests_results
 # Export coverage source maps and data.
 if [ -n "$USE_GCOV" ]; then
     find nss -name \*.gcno | tar cvfj artifacts/gcno.tar.bz2 -T-
-    lcov --capture --directory nss | bzip2 > artifacts/lcov.info.bz2
+    lcov --capture --directory nss --no-external \
+	| bzip2 > artifacts/lcov.info.bz2
 fi

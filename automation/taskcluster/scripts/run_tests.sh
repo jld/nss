@@ -38,5 +38,6 @@ cd nss/tests && ./all.sh
 # Export coverage data.
 cd && mkdir artifacts
 if [ -n "$USE_GCOV" ]; then
-    lcov --capture --directory nss | bzip2 > artifacts/lcov.info.bz2
+    lcov --capture --directory nss --no-external \
+        | bzip2 > artifacts/lcov.info.bz2
 fi
