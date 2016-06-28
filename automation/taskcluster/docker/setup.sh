@@ -25,7 +25,7 @@ apt-get install -y --no-install-recommends curl apt-utils
 # clang(-format)-3.8
 apt_packages+=('clang-3.8')
 apt_packages+=('clang-format-3.8')
-curl http://llvm.org/apt/llvm-snapshot.gpg.key | apt-key add -
+curl -L http://llvm.org/apt/llvm-snapshot.gpg.key | apt-key add -
 echo "deb http://llvm.org/apt/xenial/ llvm-toolchain-xenial-3.8 main" > /etc/apt/sources.list.d/docker.list
 
 # Install the first round of packages.
@@ -40,6 +40,9 @@ apt_packages+=('g++-6-multilib')
 apt_packages+=('g++-4.8-multilib')
 apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 60C317803A41BA51845E371A1E9377A2BA9EF27F
 echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu xenial main" > /etc/apt/sources.list.d/toolchain.list
+
+# LCOV/GCOV
+apt_packages+=('lcov')
 
 # Install the second round of packages.
 apt-get -y update

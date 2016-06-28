@@ -7,6 +7,11 @@ if [ $(id -u) = 0 ]; then
     exec su worker $0
 fi
 
+if [ -n "$NSS_GIT_REPOSITORY" ]; then
+    git clone "$NSS_GIT_REPOSITORY" nss
+    exit
+fi
+
 # Default values for testing.
 REVISION=${NSS_HEAD_REVISION:-default}
 REPOSITORY=${NSS_HEAD_REPOSITORY:-https://hg.mozilla.org/projects/nss}
