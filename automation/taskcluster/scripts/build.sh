@@ -33,4 +33,5 @@ mkdir artifacts
 tar cvfjh artifacts/dist.tar.bz2 dist tests_results
 if [ -n "$USE_GCOV" ]; then
     find nss -name \*.gcno | tar cvfj artifacts/gcno.tar.bz2 -T-
+    lcov --capture --directory nss | bzip2 > artifacts/lcov.info.bz2
 fi
