@@ -16,6 +16,12 @@ task:
     maxRunTime: 3600
     image: ttaubert/nss-ci:0.0.16
 
+    artifacts:
+      public:
+        type: directory
+        path: /home/worker/artifacts
+        expires: !from_now 24
+
     command:
       - "/bin/bash"
       - "-c"
