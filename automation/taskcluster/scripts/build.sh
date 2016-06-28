@@ -31,3 +31,6 @@ cd && echo 1 > tests_results/security/localhost
 # Package.
 mkdir artifacts
 tar cvfjh artifacts/dist.tar.bz2 dist tests_results
+if [ -n "$USE_GCOV" ]; then
+    find nss -name \*.gcno | tar cvfj artifacts/gcno.tar.bz2 -T-
+fi
