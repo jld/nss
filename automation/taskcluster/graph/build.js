@@ -110,6 +110,28 @@ function generateBuildTasks(platform, file) {
       delete task.tests;
     }
 
+    if (task.coverage) {
+      var coverageBase = parseYamlFile(path.join(dir, "_coverage.yml"), {});
+      var taskIds = tasks.map(function(task) { return task.taskId; });
+
+      var coverageTask = merge.recursive(true, {
+        requires: taskIds,
+
+        task: {
+          payload: {
+            env: {
+              TC_PARENT_TASK_IDS: taskIds.join(" ")
+            }
+          }
+        }
+      }, coverageBase);
+
+      tasks.push(coverageTask);
+
+      // |coverage| is not part of the schema.
+      delete task.coverage;
+    }
+
     return tasks;
   });
 }

@@ -1,0 +1,41 @@
+---
+- task:
+    metadata:
+      name: "Linux 64 (gcov)"
+      description: "Linux 64 (gcov)"
+
+    payload:
+      env:
+        NSS_ENABLE_TLS_1_3: 1
+        USE_GCOV: 1
+        BUILD_OPT: 1
+        USE_64: 1
+
+    extra:
+      treeherder:
+        build:
+          platform: linux64
+        machine:
+          platform: linux64
+        collection:
+          gcov: true
+
+  tests:
+    - chains
+    - cipher
+    - crmf
+    - db
+    - ec
+    - fips
+    - gtests
+    - lowhash
+    - merge
+    - ocsp
+    - pkits
+    - pkix
+    - sdr
+    - smime
+    - ssl
+    - tools
+
+  coverage: true
