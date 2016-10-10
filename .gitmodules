@@ -1,0 +1,3 @@
+[submodule "boringssl"]
+path = external_tests/boringssl
+url = https://boringssl.googlesource.com/boringssl
