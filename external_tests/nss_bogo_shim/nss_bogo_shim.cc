@@ -148,8 +148,14 @@ class TestAgent {
     SECStatus rv = SSL_OptionSet(ssl_fd_, SSL_ENABLE_SESSION_TICKETS, PR_TRUE);
     if (rv != SECSuccess) return false;
 
+    int max_version = cfg_.get<int>("max-version");
+    if (max_version == 0) {
+      max_version = SSL_LIBRARY_VERSION_TLS_1_3;
+    }
+
     SSLVersionRange vrange = {SSL_LIBRARY_VERSION_TLS_1_0,
-                              SSL_LIBRARY_VERSION_TLS_1_3};
+                              static_cast<uint16_t>(max_version)};
+
     rv = SSL_VersionRangeSet(ssl_fd_, &vrange);
     if (rv != SECSuccess) return false;
 
@@ -268,6 +274,7 @@ std::unique_ptr<const Config> ReadConfig(int argc, char** argv) {
   cfg->AddEntry<bool>("resume", false);
   cfg->AddEntry<std::string>("key-file", "");
   cfg->AddEntry<std::string>("cert-file", "");
+  cfg->AddEntry<int>("max-version", 0);
 
   auto rv = cfg->ParseArgs(argc, argv);
   switch (rv) {
