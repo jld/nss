@@ -144,17 +144,56 @@ class TestAgent {
     return true;
   }
 
+  bool GetVersionRange(SSLVersionRange& range_out) {
+    static const size_t num_versions = 4;
+    static const uint16_t versions[num_versions] = {
+      SSL_LIBRARY_VERSION_TLS_1_0,
+      SSL_LIBRARY_VERSION_TLS_1_1,
+      SSL_LIBRARY_VERSION_TLS_1_2,
+      SSL_LIBRARY_VERSION_TLS_1_3,
+    };
+
+    bool forbidden[num_versions] = {
+      cfg_.get<bool>("no-tls1"),
+      cfg_.get<bool>("no-tls11"),
+      cfg_.get<bool>("no-tls12"),
+      cfg_.get<bool>("no-tls13"),
+    };
+
+    uint16_t max_version = static_cast<uint16_t>(cfg_.get<int>("max-version"));
+
+    size_t end = num_versions;
+    while (end > 0 && (forbidden[end - 1] || versions[end - 1] > max_version)) {
+      --end;
+    }
+
+    size_t begin = 0;
+    while (begin < end && forbidden[begin]) {
+      ++begin;
+    }
+
+    if (begin >= end) {
+      // All versions forbidden.
+      return false;
+    }
+    for (size_t i = begin; i < end; ++i) {
+      if (forbidden[i]) {
+        // Not a contiguous range.
+        return false;
+      }
+    }
+
+    range_out.min = versions[begin];
+    range_out.max = versions[end - 1];
+    return true;
+  }
+
   bool SetupOptions() {
     SECStatus rv = SSL_OptionSet(ssl_fd_, SSL_ENABLE_SESSION_TICKETS, PR_TRUE);
     if (rv != SECSuccess) return false;
 
-    int max_version = cfg_.get<int>("max-version");
-    if (max_version == 0) {
-      max_version = SSL_LIBRARY_VERSION_TLS_1_3;
-    }
-
-    SSLVersionRange vrange = {SSL_LIBRARY_VERSION_TLS_1_0,
-                              static_cast<uint16_t>(max_version)};
+    SSLVersionRange vrange;
+    if (!GetVersionRange(vrange)) return false;
 
     rv = SSL_VersionRangeSet(ssl_fd_, &vrange);
     if (rv != SECSuccess) return false;
@@ -274,7 +313,12 @@ std::unique_ptr<const Config> ReadConfig(int argc, char** argv) {
   cfg->AddEntry<bool>("resume", false);
   cfg->AddEntry<std::string>("key-file", "");
   cfg->AddEntry<std::string>("cert-file", "");
-  cfg->AddEntry<int>("max-version", 0);
+  cfg->AddEntry<int>("max-version", 0xffff);
+  cfg->AddEntry<bool>("no-ssl3", false); // (ignored)
+  cfg->AddEntry<bool>("no-tls1", false);
+  cfg->AddEntry<bool>("no-tls11", false);
+  cfg->AddEntry<bool>("no-tls12", false);
+  cfg->AddEntry<bool>("no-tls13", false);
 
   auto rv = cfg->ParseArgs(argc, argv);
   switch (rv) {
