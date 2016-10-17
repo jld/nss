@@ -16,6 +16,7 @@
 #include "sslerr.h"
 #include "sslproto.h"
 
+#include "bogo_packet.h"
 #include "nsskeys.h"
 
 bool exitCodeUnimplemented = false;
@@ -99,7 +100,12 @@ class TestAgent {
       return false;
     }
 
-    ssl_fd_ = SSL_ImportFD(NULL, pr_fd_);
+    if (cfg_.get<bool>("dtls")) {
+      pr_fd_ = BoGoPacket_ImportFD(pr_fd_);
+      ssl_fd_ = DTLS_ImportFD(NULL, pr_fd_);
+    } else {
+      ssl_fd_ = SSL_ImportFD(NULL, pr_fd_);
+    }
     if (!ssl_fd_) return false;
     pr_fd_ = nullptr;
 
@@ -154,7 +160,7 @@ class TestAgent {
     };
 
     bool forbidden[num_versions] = {
-      cfg_.get<bool>("no-tls1"),
+      cfg_.get<bool>("no-tls1") || cfg_.get<bool>("dtls"),
       cfg_.get<bool>("no-tls11"),
       cfg_.get<bool>("no-tls12"),
       cfg_.get<bool>("no-tls13"),
@@ -310,6 +316,7 @@ std::unique_ptr<const Config> ReadConfig(int argc, char** argv) {
 
   cfg->AddEntry<int>("port", 0);
   cfg->AddEntry<bool>("server", false);
+  cfg->AddEntry<bool>("dtls", false);
   cfg->AddEntry<int>("resume-count", 0);
   cfg->AddEntry<std::string>("key-file", "");
   cfg->AddEntry<std::string>("cert-file", "");
