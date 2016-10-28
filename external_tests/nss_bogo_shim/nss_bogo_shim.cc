@@ -152,15 +152,14 @@ class TestAgent {
     return true;
   }
 
-  bool GetVersionRange(SSLVersionRange* range_out, bool dtls) {
+  bool GetVersionRange(SSLVersionRange* range_out, SSLProtocolVariant variant) {
     SSLVersionRange supported;
-    const auto variant = dtls ? ssl_variant_datagram : ssl_variant_stream;
     if (SSL_VersionRangeGetSupported(variant, &supported) != SECSuccess) {
       return false;
     }
 
     auto max_allowed = static_cast<uint16_t>(cfg_.get<int>("max-version"));
-    if (dtls) {
+    if (variant == ssl_variant_datagram) {
       // For DTLS this is the wire version; adjust if needed.
       switch (max_allowed) {
       case SSL_LIBRARY_VERSION_DTLS_1_0_WIRE:
@@ -181,7 +180,7 @@ class TestAgent {
     for (size_t i = 1; i < PR_ARRAY_SIZE(kVersionDisableFlags); ++i) {
       auto version =
         static_cast<uint16_t>(SSL_LIBRARY_VERSION_TLS_1_0 + (i - 1));
-      if (dtls) {
+      if (variant == ssl_variant_datagram) {
         // In DTLS mode, the -no-tlsN flags refer to DTLS versions,
         // but NSS wants the corresponding TLS versions.
         if (version == SSL_LIBRARY_VERSION_TLS_1_1) {
@@ -228,7 +227,7 @@ class TestAgent {
     if (rv != SECSuccess) return false;
 
     SSLVersionRange vrange;
-    if (!GetVersionRange(&vrange, false)) return false;
+    if (!GetVersionRange(&vrange, ssl_variant_stream)) return false;
 
     rv = SSL_VersionRangeSet(ssl_fd_, &vrange);
     if (rv != SECSuccess) return false;
