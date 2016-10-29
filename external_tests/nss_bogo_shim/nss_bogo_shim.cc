@@ -168,7 +168,14 @@ class TestAgent {
       case SSL_LIBRARY_VERSION_DTLS_1_2_WIRE:
         max_allowed = SSL_LIBRARY_VERSION_DTLS_1_2;
         break;
-        // 1.3 is the same number for everything
+      case SSL_LIBRARY_VERSION_DTLS_1_3_WIRE:
+        max_allowed = SSL_LIBRARY_VERSION_DTLS_1_3;
+        break;
+      case 0xffff: // No maximum specified.
+        break;
+      default:
+        // Unrecognized DTLS version.
+        return false;
       }
     }
 
