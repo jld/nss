@@ -56,7 +56,14 @@
         "RequireAnyClientCertificate-TLS1*":"Bug 1339387",
         "SendExtensionOnClientCertificate-TLS13":"Bug 1339392",
         "ALPNClient-Mismatch-TLS13":"NSS sends alerts in response to errors in protected handshake messages in the clear",
-        "P224-Server":"NSS doesn't support P-224"
+        "P224-Server":"NSS doesn't support P-224",
+        "MinimumVersion-Client*-TLS12-TLS12-DTLS":"Bug 1314188",
+        "VersionNegotiationExtension-*-DTLS":"DTLS 1.3 is not a standard yet; see bug 1314819",
+        "AppDataAfterChangeCipherSpec-DTLS*":"Bug 1326130",
+        "VersionNegotiation-Client*-TLS12-TLS1*-DTLS":"Bug 1326129",
+        "ReorderHandshakeFragments-*-DTLS":"Bug 1326117",
+        "MixCompleteMessageWithFragments-DTLS":"Bug 1326117",
+        "FragmentMessageTypeMismatch-DTLS":"Bug 1326128"
     },
     "ErrorMap" : {
         ":HANDSHAKE_FAILURE_ON_CLIENT_HELLO:":"SSL_ERROR_NO_CYPHER_OVERLAP",

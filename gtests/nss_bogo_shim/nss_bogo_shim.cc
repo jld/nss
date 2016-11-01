@@ -18,6 +18,7 @@
 #include "sslerr.h"
 #include "sslproto.h"
 
+#include "bogo_packet.h"
 #include "nsskeys.h"
 
 static const char* kVersionDisableFlags[] = {"no-ssl3", "no-tls1", "no-tls11",
@@ -104,7 +105,12 @@ class TestAgent {
       return false;
     }
 
-    ssl_fd_ = SSL_ImportFD(NULL, pr_fd_);
+    if (cfg_.get<bool>("dtls")) {
+      pr_fd_ = BoGoPacket::Import(pr_fd_);
+      ssl_fd_ = DTLS_ImportFD(NULL, pr_fd_);
+    } else {
+      ssl_fd_ = SSL_ImportFD(NULL, pr_fd_);
+    }
     if (!ssl_fd_) return false;
     pr_fd_ = nullptr;
 
@@ -190,6 +196,12 @@ class TestAgent {
     if (SSL_VersionRangeGetSupported(variant, &supported) != SECSuccess) {
       return false;
     }
+    // Override the library maximum -- DTLS 1.3 isn't specified yet,
+    // and enabling TLS 1.3 features in DTLS mode causes disagreements
+    // with BoGo.  (Bug 1314819)
+    if (variant == ssl_variant_datagram) {
+      supported.max = SSL_LIBRARY_VERSION_DTLS_1_2;
+    }
 
     uint16_t min_allowed;
     uint16_t max_allowed;
@@ -260,10 +272,19 @@ class TestAgent {
     if (rv != SECSuccess) return false;
 
     SSLVersionRange vrange;
-    if (!GetVersionRange(&vrange, ssl_variant_stream)) return false;
+    if (!GetVersionRange(&vrange, cfg_.get<bool>("dtls")
+                         ? ssl_variant_datagram
+                         : ssl_variant_stream)) {
+      std::cerr << "Couldn't compute version range from options.\n";
+      return false;
+    }
 
     rv = SSL_VersionRangeSet(ssl_fd_, &vrange);
-    if (rv != SECSuccess) return false;
+    if (rv != SECSuccess) {
+      std::cerr << "Couldn't set version range to [" << vrange.min << ","
+                << vrange.max << "].\n";
+      return false;
+    }
 
     SSLVersionRange verify_vrange;
     rv = SSL_VersionRangeGet(ssl_fd_, &verify_vrange);
@@ -363,14 +384,52 @@ class TestAgent {
     return SECSuccess;
   }
 
-  SECStatus Handshake() { return SSL_ForceHandshake(ssl_fd_); }
+  bool ShouldTryAgain() {
+    // Timeouts aren't supported yet, because:
+    //
+    // 1. See the large comment about blocking/nonblocking read on the
+    // real socket in BogoPacketImpl::Read; neither one works for all
+    // tests and this needs to be investigated and fixed.
+    //
+    // 2. We need to "sleep" in a way that affects the DTLS retransmit
+    // timers but not actually sleep -- not only is wasting several
+    // minutes per test run annoying, but also the BoGo harness will
+    // time out in some cases.
+    if (PR_GetError() == PR_WOULD_BLOCK_ERROR) {
+      BoGoPacket* packetized = BoGoPacket::FromDesc(ssl_fd_->lower);
+      PR_ASSERT(packetized);
+      if (packetized && packetized->NSecUntilReadable() > 0) {
+        // Got timeout packet.
+        exitCodeUnimplemented = true;
+        return false;
+      }
+      // The WOULD_BLOCK must be from inside NSS; retry.
+      // (SendSplitAlert-* and LargeCiphertext-DTLS cause this.)
+      return true;
+    }
+    // Some other error.
+    return false;
+  }
+
+  SECStatus Handshake() {
+    SECStatus rv;
+    do {
+      rv = SSL_ForceHandshake(ssl_fd_);
+    } while (rv == SECFailure && ShouldTryAgain());
+    return rv;
+  }
 
   // Implement a trivial echo client/server. Read bytes from the other side,
   // flip all the bits, and send them back.
   SECStatus ReadWrite() {
     for (;;) {
-      uint8_t block[512];
-      int32_t rv = PR_Read(ssl_fd_, block, sizeof(block));
+      // For DTLS, this buffer needs to be large enough for a
+      // maximum-length application data message.
+      uint8_t block[16384];
+      int32_t rv;
+      do {
+        rv = PR_Read(ssl_fd_, block, sizeof(block));
+      } while (rv < 0 && ShouldTryAgain());
       if (rv < 0) {
         std::cerr << "Failure reading\n";
         return SECFailure;
@@ -382,7 +441,9 @@ class TestAgent {
         block[i] ^= 0xff;
       }
 
-      rv = PR_Write(ssl_fd_, block, len);
+      do {
+        rv = PR_Write(ssl_fd_, block, len);
+      } while (rv < 0 && ShouldTryAgain());
       if (rv != len) {
         std::cerr << "Write failure\n";
         PORT_SetError(SEC_ERROR_OUTPUT_LEN);
@@ -513,6 +574,7 @@ std::unique_ptr<const Config> ReadConfig(int argc, char** argv) {
   cfg->AddEntry<bool>("verify-peer", false);
   cfg->AddEntry<std::string>("advertise-alpn", "");
   cfg->AddEntry<std::string>("expect-alpn", "");
+  cfg->AddEntry<bool>("dtls", false);
 
   auto rv = cfg->ParseArgs(argc, argv);
   switch (rv) {
