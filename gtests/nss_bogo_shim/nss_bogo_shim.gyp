@@ -10,6 +10,7 @@
       'target_name': 'nss_bogo_shim',
       'type': 'executable',
       'sources': [
+        'bogo_packet.cc',
         'config.cc',
         'nss_bogo_shim.cc',
         'nsskeys.cc'

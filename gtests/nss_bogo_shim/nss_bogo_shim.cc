@@ -18,6 +18,7 @@
 #include "sslerr.h"
 #include "sslproto.h"
 
+#include "bogo_packet.h"
 #include "nsskeys.h"
 
 static const char* kVersionDisableFlags[] = {"no-ssl3", "no-tls1", "no-tls11",
@@ -65,6 +66,18 @@ class TestAgent {
     return agent;
   }
 
+  bool SleepUntilReadable() {
+    PRFileDesc* pr_fd = ssl_fd_ ? ssl_fd_->lower : pr_fd_;
+    if (BoGoPacket* packetized = BoGoPacket::FromDesc(pr_fd)) {
+      PRIntervalTime to_sleep = packetized->TimeUntilReadable();
+      std::cerr << "SLEEPING: " << to_sleep << " NSPR ticks.\n";
+      PR_Sleep(to_sleep);
+      std::cerr << "WOKE UP.\n";
+      return true;
+    }
+    return false;
+  }
+
   bool Init() {
     if (!ConnectTcp()) {
       return false;
@@ -104,7 +117,12 @@ class TestAgent {
       return false;
     }
 
-    ssl_fd_ = SSL_ImportFD(NULL, pr_fd_);
+    if (cfg_.get<bool>("dtls")) {
+      pr_fd_ = BoGoPacket::Import(pr_fd_);
+      ssl_fd_ = DTLS_ImportFD(NULL, pr_fd_);
+    } else {
+      ssl_fd_ = SSL_ImportFD(NULL, pr_fd_);
+    }
     if (!ssl_fd_) return false;
     pr_fd_ = nullptr;
 
@@ -262,27 +280,51 @@ class TestAgent {
 
   bool SetupOptions() {
     SECStatus rv = SSL_OptionSet(ssl_fd_, SSL_ENABLE_SESSION_TICKETS, PR_TRUE);
-    if (rv != SECSuccess) return false;
+    if (rv != SECSuccess) {
+      std::cerr << "Couldn't enable session tickets.\n";
+      return false;
+    }
 
     SSLVersionRange vrange;
-    if (!GetVersionRange(&vrange, ssl_variant_stream)) return false;
+    if (!GetVersionRange(&vrange, cfg_.get<bool>("dtls")
+                         ? ssl_variant_datagram
+                         : ssl_variant_stream)) {
+      std::cerr << "Couldn't compute version range from options.\n";
+      return false;
+    }
 
     rv = SSL_VersionRangeSet(ssl_fd_, &vrange);
-    if (rv != SECSuccess) return false;
+    if (rv != SECSuccess) {
+      std::cerr << "Couldn't set version range to [" << vrange.min << ","
+                << vrange.max << "].\n";
+      return false;
+    }
 
     rv = SSL_OptionSet(ssl_fd_, SSL_NO_CACHE, false);
-    if (rv != SECSuccess) return false;
+    if (rv != SECSuccess) {
+      std::cerr << "Couldn't disable cache.\n";
+      return false;
+    }
 
     if (!cfg_.get<bool>("server")) {
       // Needed to make resumption work.
       rv = SSL_SetURL(ssl_fd_, "server");
-      if (rv != SECSuccess) return false;
+      if (rv != SECSuccess) {
+        std::cerr << "Couldn't set SNI string.\n";
+        return false;
+      }
     }
 
     rv = SSL_OptionSet(ssl_fd_, SSL_ENABLE_EXTENDED_MASTER_SECRET, PR_TRUE);
-    if (rv != SECSuccess) return false;
+    if (rv != SECSuccess) {
+      std::cerr << "Couldn't enable extended master secret.\n";
+      return false;
+    }
 
-    if (!EnableNonExportCiphers()) return false;
+    if (!EnableNonExportCiphers()) {
+      std::cerr << "Couldn't fix ciphersuite config.\n";
+      return false;
+    }
 
     return true;
   }
@@ -321,14 +363,27 @@ class TestAgent {
     return SECSuccess;
   }
 
-  SECStatus Handshake() { return SSL_ForceHandshake(ssl_fd_); }
+  SECStatus Handshake() {
+    SECStatus rv;
+    do {
+      rv = SSL_ForceHandshake(ssl_fd_);
+    } while ((rv == SECWouldBlock
+              // Sigh:
+              || (rv == SECFailure && PR_GetError() == PR_WOULD_BLOCK_ERROR))
+             && SleepUntilReadable());
+    return rv;
+  }
 
   // Implement a trivial echo client/server. Read bytes from the other side,
   // flip all the bits, and send them back.
   SECStatus ReadWrite() {
     for (;;) {
       uint8_t block[512];
-      int32_t rv = PR_Read(ssl_fd_, block, sizeof(block));
+      int32_t rv;
+      do {
+        rv = PR_Read(ssl_fd_, block, sizeof(block));
+      } while (rv < 0 && PR_GetError() == PR_WOULD_BLOCK_ERROR
+               && SleepUntilReadable());
       if (rv < 0) {
         std::cerr << "Failure reading\n";
         return SECFailure;
@@ -340,7 +395,10 @@ class TestAgent {
         block[i] ^= 0xff;
       }
 
-      rv = PR_Write(ssl_fd_, block, len);
+      do {
+        rv = PR_Write(ssl_fd_, block, len);
+      } while (rv < 0 && PR_GetError() == PR_WOULD_BLOCK_ERROR
+               && SleepUntilReadable());
       if (rv != len) {
         std::cerr << "Write failure\n";
         PORT_SetError(SEC_ERROR_OUTPUT_LEN);
@@ -442,6 +500,7 @@ std::unique_ptr<const Config> ReadConfig(int argc, char** argv) {
     cfg->AddEntry<bool>(flag, false);
   }
   cfg->AddEntry<bool>("write-then-read", false);
+  cfg->AddEntry<bool>("dtls", false);
 
   auto rv = cfg->ParseArgs(argc, argv);
   switch (rv) {
