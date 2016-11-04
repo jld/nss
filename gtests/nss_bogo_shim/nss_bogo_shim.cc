@@ -74,9 +74,13 @@ class TestAgent {
     PRFileDesc* pr_fd = ssl_fd_ ? ssl_fd_->lower : pr_fd_;
     if (BoGoPacket* packetized = BoGoPacket::FromDesc(pr_fd)) {
       PRIntervalTime to_sleep = packetized->TimeUntilReadable();
+#if 0
       std::cerr << "SLEEPING: " << to_sleep << " NSPR ticks.\n";
+#endif
       PR_Sleep(to_sleep);
+#if 0
       std::cerr << "WOKE UP.\n";
+#endif
       return true;
     }
     return false;
