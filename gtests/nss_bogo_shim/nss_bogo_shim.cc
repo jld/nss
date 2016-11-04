@@ -217,6 +217,12 @@ class TestAgent {
     if (SSL_VersionRangeGetSupported(variant, &supported) != SECSuccess) {
       return false;
     }
+    // Override the library maximum -- DTLS 1.3 isn't specified yet,
+    // and enabling TLS 1.3 features in DTLS mode causes disagreements
+    // with BoGo.  (Bug 1314819)
+    if (variant == ssl_variant_datagram) {
+      supported.max = SSL_LIBRARY_VERSION_DTLS_1_2;
+    }
 
     uint16_t min_allowed;
     uint16_t max_allowed;
