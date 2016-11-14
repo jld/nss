@@ -12,6 +12,7 @@
       'sources': [
         'bogo_packet.cc',
         'config.cc',
+        'mock_clock.c',
         'nss_bogo_shim.cc',
         'nsskeys.cc'
       ],
