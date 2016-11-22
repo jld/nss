@@ -43,7 +43,7 @@ bogo_init
 	 -loose-errors -allow-unimplemented \
 	 -shim-config "${SOURCE_DIR}/gtests/nss_bogo_shim/config.json" \
 	 ${BOGO_TEST_ONLY:+-test "$BOGO_TEST_ONLY"} \
-	 ${BOGO_GDB:+-gdb} ) \
+	 ${BOGO_GDB:+-gdb} ${BOGO_DEBUG:+-debug} ) \
 	 2>bogo.errors | tee bogo.log
 html_msg "${PIPESTATUS[0]}" 0 "Bogo" "Run successfully"
 grep -i 'FAILED\|Assertion failure' bogo.errors
