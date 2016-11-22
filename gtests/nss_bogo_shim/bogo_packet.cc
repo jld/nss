@@ -8,6 +8,7 @@
 #if 0
 #include <iostream>
 #endif
+#include <unistd.h>
 
 #include "bogo_packet.h"
 
@@ -46,6 +47,13 @@ private:
   ~BoGoPacketImpl() {
     PR_ASSERT(desc_.identity == Identity());
     PR_ASSERT(desc_.secret == reinterpret_cast<PRFilePrivate*>(this));
+    // Need to wait until peer is done sending; otherwise it will get
+    // RST and may lose the alert that the test spec is expecting.
+    // (SO_LINGER isn't enough; need to shutdown and read to end.)
+    PR_Shutdown(tcp_, PR_SHUTDOWN_SEND);
+    char buf[64];
+    while (PR_Read(tcp_, buf, sizeof(buf)) > 0)
+      /* discard */;
     PR_Close(tcp_);
   }
 
