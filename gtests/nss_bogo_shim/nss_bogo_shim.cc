@@ -373,7 +373,7 @@ class TestAgent {
   // flip all the bits, and send them back.
   SECStatus ReadWrite() {
     for (;;) {
-      uint8_t block[512];
+      uint8_t block[16384];
       int32_t rv;
       do {
         rv = PR_Read(ssl_fd_, block, sizeof(block));
