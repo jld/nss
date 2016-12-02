@@ -58,7 +58,11 @@
         "Resume-Server-TLS13-TLS13":"Bug 1314351",
         "MinimumVersion-Client*-TLS12-TLS12-DTLS":"Bug 1314188",
         "VersionNegotiationExtension-*-DTLS":"DTLS 1.3 is not a standard yet; see bug 1314819",
-        "AppDataAfterChangeCipherSpec-DTLS*":"FIXME Is this a protocol violation that Boring tolerates? NSS does not."
+        "AppDataAfterChangeCipherSpec-DTLS*":"FIXME Is this a protocol violation that Boring tolerates? NSS does not.",
+        "VersionNegotiation-Client*-TLS12-TLS1*-DTLS":"FIXME Does BoGo expect the bug 774547 workaround for DTLS?",
+        "ReorderHandshakeFragments-*-DTLS":"FIXME fragment bug of unknown etiology",
+        "MixCompleteMessageWithFragments-DTLS":"FIXME fragment bug of unknown etiology",
+        "FragmentMessageTypeMismatch-DTLS":"FIXME bug but maybe unrelated to other fragment bugs"
     },
     "ErrorMap" : {
         ":HANDSHAKE_FAILURE_ON_CLIENT_HELLO:":"SSL_ERROR_NO_CYPHER_OVERLAP",
