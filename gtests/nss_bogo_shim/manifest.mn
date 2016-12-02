@@ -13,10 +13,6 @@ CPPSRCS = \
       nss_bogo_shim.cc \
       $(NULL)
 
-CSRCS = \
-      mock_clock.c \
-      $(NULL)
-
 REQUIRES = nspr nss libdbm
 
 PROGRAM = nss_bogo_shim
