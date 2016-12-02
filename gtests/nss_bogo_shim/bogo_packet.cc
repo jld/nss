@@ -188,7 +188,8 @@ private:
     }
 
     char opcode;
-    // This has to be nonblocking.  Otherwise, in DTLS-Retransmit-*-1:
+    // A blocking read isn't quite right here. What happens during the
+    // DTLS-Retransmit-*-1 tests:
     // * NSS sends ClientHello
     // * BoGo drops it and sends a 1-second timeout
     // * NSS shim waits 1s
@@ -196,16 +197,9 @@ private:
     //   (dtls_GatherData before dtls_CheckTimer)
     // * BoGo is still waiting for the retransmit
     // * Deadlock and test failure.
-    // TODO factor this out.
-    // (Also, note that once the opcode is sent, the rest will immediately follow,
-    // so no need to make anything else async.)
-    switch (PR_Recv(tcp_, &opcode, 1, 0, PR_INTERVAL_NO_WAIT)) {
-    case 0:
-      PR_SetError(PR_END_OF_FILE_ERROR, 0);
-    case -1:
-      if (PR_GetError() == PR_IO_TIMEOUT_ERROR) {
-        PR_SetError(PR_WOULD_BLOCK_ERROR, 0);
-      }
+    // However, using a nonblocking read (PR_Recv with PR_INTERVAL_NO_WAIT)
+    // causes a number of other tests to break.  This need to be investigated.
+    if (!ReadAll(&opcode, 1)) {
       return -1;
     }
 

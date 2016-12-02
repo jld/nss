@@ -66,16 +66,6 @@ class TestAgent {
     return agent;
   }
 
-  bool SleepUntilReadable() {
-    PRFileDesc* pr_fd = ssl_fd_ ? ssl_fd_->lower : pr_fd_;
-    if (BoGoPacket* packetized = BoGoPacket::FromDesc(pr_fd)) {
-      PRIntervalTime to_sleep = packetized->TimeUntilReadable();
-      PR_Sleep(to_sleep);
-      return true;
-    }
-    return false;
-  }
-
   bool Init() {
     if (!ConnectTcp()) {
       return false;
@@ -352,14 +342,38 @@ class TestAgent {
     return SECSuccess;
   }
 
+  bool ShouldTryAgain() {
+    // Timeouts aren't supported yet, because:
+    //
+    // 1. See the large comment about blocking/nonblocking read on the
+    // real socket in bogo_packet.cc; neither one works for all tests
+    // and this needs to be investigated and fixed.
+    //
+    // 2. We need to "sleep" in a way that affects the DTLS retransmit
+    // timers but not actually sleep -- not only is wasting several
+    // minutes per test run annoying, but also the BoGo harness will
+    // time out in some cases.
+    if (PR_GetError() == PR_WOULD_BLOCK_ERROR) {
+      BoGoPacket* packetized = BoGoPacket::FromDesc(ssl_fd_->lower);
+      PR_ASSERT(packetized);
+      if (packetized && packetized->TimeUntilReadable() > 0) {
+        // Got timeout packet.
+        exitCodeUnimplemented = true;
+        return false;
+      }
+      // The WOULD_BLOCK must be from inside NSS; retry.
+      // (SendSplitAlert-* and LargeCiphertext-DTLS cause this.)
+      return true;
+    }
+    // Some other error.
+    return false;
+  }
+
   SECStatus Handshake() {
     SECStatus rv;
     do {
       rv = SSL_ForceHandshake(ssl_fd_);
-    } while ((rv == SECWouldBlock
-              // Sigh:
-              || (rv == SECFailure && PR_GetError() == PR_WOULD_BLOCK_ERROR))
-             && SleepUntilReadable());
+    } while (rv == SECFailure && ShouldTryAgain());
     return rv;
   }
 
@@ -371,8 +385,7 @@ class TestAgent {
       int32_t rv;
       do {
         rv = PR_Read(ssl_fd_, block, sizeof(block));
-      } while (rv < 0 && PR_GetError() == PR_WOULD_BLOCK_ERROR
-               && SleepUntilReadable());
+      } while (rv < 0 && ShouldTryAgain());
       if (rv < 0) {
         std::cerr << "Failure reading\n";
         return SECFailure;
@@ -386,8 +399,7 @@ class TestAgent {
 
       do {
         rv = PR_Write(ssl_fd_, block, len);
-      } while (rv < 0 && PR_GetError() == PR_WOULD_BLOCK_ERROR
-               && SleepUntilReadable());
+      } while (rv < 0 && ShouldTryAgain());
       if (rv != len) {
         std::cerr << "Write failure\n";
         PORT_SetError(SEC_ERROR_OUTPUT_LEN);
