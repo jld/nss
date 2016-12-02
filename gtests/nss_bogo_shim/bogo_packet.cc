@@ -5,9 +5,6 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nspr.h"
-#if 0
-#include <iostream>
-#endif
 #include <unistd.h>
 
 #include "bogo_packet.h"
@@ -234,10 +231,6 @@ private:
       delay_from_ = PR_IntervalNow();
       PR_ASSERT(nsec / 1000 <= 0xFFFFFFFF);
       delay_by_ = PR_MicrosecondsToInterval(static_cast<PRUint32>(nsec / 1000));
-#if 0
-      std::cerr << "DELAY REQUEST: " << nsec << " ns, "
-                << delay_by_ << " NSPR ticks.\n";
-#endif
       PR_SetError(PR_WOULD_BLOCK_ERROR, 0);
       return -1;
     }
