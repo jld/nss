@@ -62,7 +62,7 @@
         "VersionNegotiation-Client*-TLS12-TLS1*-DTLS":"FIXME Does BoGo expect the bug 774547 workaround for DTLS?",
         "ReorderHandshakeFragments-*-DTLS":"Bug 1326117",
         "MixCompleteMessageWithFragments-DTLS":"Bug 1326117",
-        "FragmentMessageTypeMismatch-DTLS":"FIXME bug but maybe unrelated to other fragment bugs"
+        "FragmentMessageTypeMismatch-DTLS":"Bug 1326128"
     },
     "ErrorMap" : {
         ":HANDSHAKE_FAILURE_ON_CLIENT_HELLO:":"SSL_ERROR_NO_CYPHER_OVERLAP",
