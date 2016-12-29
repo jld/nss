@@ -59,7 +59,7 @@
         "MinimumVersion-Client*-TLS12-TLS12-DTLS":"Bug 1314188",
         "VersionNegotiationExtension-*-DTLS":"DTLS 1.3 is not a standard yet; see bug 1314819",
         "AppDataAfterChangeCipherSpec-DTLS*":"FIXME Is this a protocol violation that Boring tolerates? NSS does not.",
-        "VersionNegotiation-Client*-TLS12-TLS1*-DTLS":"FIXME Does BoGo expect the bug 774547 workaround for DTLS?",
+        "VersionNegotiation-Client*-TLS12-TLS1*-DTLS":"Bug 1326129",
         "ReorderHandshakeFragments-*-DTLS":"Bug 1326117",
         "MixCompleteMessageWithFragments-DTLS":"Bug 1326117",
         "FragmentMessageTypeMismatch-DTLS":"Bug 1326128"
