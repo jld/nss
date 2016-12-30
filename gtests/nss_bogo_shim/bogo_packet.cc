@@ -11,12 +11,19 @@
 
 class BoGoPacketImpl final : BoGoPacket {
 public:
-  PRIntervalTime TimeUntilReadable() override {
-    const PRIntervalTime already_delayed = PR_IntervalNow() - delay_from_;
-    if (delay_by_ < already_delayed) {
-      return 0;
+  uint64_t NSecUntilReadable() override {
+    return timeout_;
+  }
+
+  // FIXME jld@mozilla.com: nothing uses this yet (see comments
+  // elsewhere about why timeouts aren't handled), and this might not
+  // be the right design for fake blocking.
+  void TimeHasElapsed(uint64_t nsec) {
+    if (nsec > timeout_) {
+      timeout_ = 0;
+    } else {
+      timeout_ -= nsec;
     }
-    return delay_by_ - already_delayed;
   }
 
   static BoGoPacketImpl* FromDesc(PRFileDesc* desc) {
@@ -37,8 +44,7 @@ private:
     desc_.dtor = nullptr;
     desc_.identity = Identity();
     tcp_ = tcp;
-    delay_from_ = PR_IntervalNow();
-    delay_by_ = 0;
+    timeout_ = 0;
   }
 
   ~BoGoPacketImpl() {
@@ -182,7 +188,7 @@ private:
   }
 
   PRInt32 Read(void* buf, PRInt32 amount) {
-    if (TimeUntilReadable() > 0) {
+    if (NSecUntilReadable() > 0) {
       PR_SetError(PR_WOULD_BLOCK_ERROR, 0);
       return -1;
     }
@@ -222,9 +228,7 @@ private:
       if (!WriteAll(&kOpcodeTimeoutAck, 1)) {
         return -1;
       }
-      delay_from_ = PR_IntervalNow();
-      PR_ASSERT(nsec / 1000 <= 0xFFFFFFFF);
-      delay_by_ = PR_MicrosecondsToInterval(static_cast<PRUint32>(nsec / 1000));
+      timeout_ = nsec;
       PR_SetError(PR_WOULD_BLOCK_ERROR, 0);
       return -1;
     }
@@ -270,8 +274,7 @@ private:
 
   PRFileDesc desc_;
   PRFileDesc* tcp_;
-  PRIntervalTime delay_from_;
-  PRIntervalTime delay_by_;
+  uint64_t timeout_;
 };
 
 /* static */ const char BoGoPacketImpl::kOpcodePacket = 'P';

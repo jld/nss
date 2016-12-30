@@ -10,5 +10,6 @@ class BoGoPacket {
 public:
   static PRFileDesc* Import(PRFileDesc* tcp);
   static BoGoPacket* FromDesc(PRFileDesc* desc);
-  virtual PRIntervalTime TimeUntilReadable() = 0;
+  virtual uint64_t NSecUntilReadable() = 0;
+  virtual void TimeHasElapsed(uint64_t nsec) = 0;
 };
