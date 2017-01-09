@@ -147,12 +147,12 @@ private:
     return ok;
   }
 
-  bool ReadBE32(uint32_t& result) {
+  bool ReadBE32(uint32_t* result) {
     uint8_t buf[4];
     if (!ReadAll(&buf, 4)) {
       return false;
     }
-    result =
+    *result =
       (static_cast<uint32_t>(buf[0]) << 24) |
       (static_cast<uint32_t>(buf[1]) << 16) |
       (static_cast<uint32_t>(buf[2]) << 8) |
@@ -170,12 +170,12 @@ private:
     return WriteAll(&buf, 4);
   }
 
-  bool ReadBE64(uint64_t& result) {
+  bool ReadBE64(uint64_t* result) {
     uint8_t buf[8];
     if (!ReadAll(&buf, 8)) {
       return false;
     }
-    result =
+    *result =
       (static_cast<uint64_t>(buf[0]) << 56) |
       (static_cast<uint64_t>(buf[1]) << 48) |
       (static_cast<uint64_t>(buf[2]) << 40) |
@@ -211,7 +211,7 @@ private:
 
     if (opcode == kOpcodePacket) {
       uint32_t ulen;
-      if (!ReadBE32(ulen)) {
+      if (!ReadBE32(&ulen)) {
         return -1;
       }
       const PRInt32 len = static_cast<PRInt32>(ulen);
@@ -222,7 +222,7 @@ private:
 
     if (opcode == kOpcodeTimeout) {
       uint64_t nsec;
-      if (!ReadBE64(nsec)) {
+      if (!ReadBE64(&nsec)) {
         return -1;
       }
       if (!WriteAll(&kOpcodeTimeoutAck, 1)) {
