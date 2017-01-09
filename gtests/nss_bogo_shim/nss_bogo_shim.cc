@@ -280,10 +280,7 @@ class TestAgent {
 
   bool SetupOptions() {
     SECStatus rv = SSL_OptionSet(ssl_fd_, SSL_ENABLE_SESSION_TICKETS, PR_TRUE);
-    if (rv != SECSuccess) {
-      std::cerr << "Couldn't enable session tickets.\n";
-      return false;
-    }
+    if (rv != SECSuccess) return false;
 
     SSLVersionRange vrange;
     if (!GetVersionRange(&vrange, cfg_.get<bool>("dtls")
@@ -301,30 +298,18 @@ class TestAgent {
     }
 
     rv = SSL_OptionSet(ssl_fd_, SSL_NO_CACHE, false);
-    if (rv != SECSuccess) {
-      std::cerr << "Couldn't disable cache.\n";
-      return false;
-    }
+    if (rv != SECSuccess) return false;
 
     if (!cfg_.get<bool>("server")) {
       // Needed to make resumption work.
       rv = SSL_SetURL(ssl_fd_, "server");
-      if (rv != SECSuccess) {
-        std::cerr << "Couldn't set SNI string.\n";
-        return false;
-      }
+      if (rv != SECSuccess) return false;
     }
 
     rv = SSL_OptionSet(ssl_fd_, SSL_ENABLE_EXTENDED_MASTER_SECRET, PR_TRUE);
-    if (rv != SECSuccess) {
-      std::cerr << "Couldn't enable extended master secret.\n";
-      return false;
-    }
+    if (rv != SECSuccess) return false;
 
-    if (!EnableNonExportCiphers()) {
-      std::cerr << "Couldn't fix ciphersuite config.\n";
-      return false;
-    }
+    if (!EnableNonExportCiphers()) return false;
 
     return true;
   }
