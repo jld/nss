@@ -9,7 +9,7 @@
 
 #include "bogo_packet.h"
 
-class BoGoPacketImpl final : BoGoPacket {
+class BoGoPacketImpl final : public BoGoPacket {
 public:
   uint64_t NSecUntilReadable() override {
     return timeout_;

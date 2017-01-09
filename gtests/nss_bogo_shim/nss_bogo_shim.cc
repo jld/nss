@@ -346,8 +346,8 @@ class TestAgent {
     // Timeouts aren't supported yet, because:
     //
     // 1. See the large comment about blocking/nonblocking read on the
-    // real socket in bogo_packet.cc; neither one works for all tests
-    // and this needs to be investigated and fixed.
+    // real socket in BogoPacketImpl::Read; neither one works for all
+    // tests and this needs to be investigated and fixed.
     //
     // 2. We need to "sleep" in a way that affects the DTLS retransmit
     // timers but not actually sleep -- not only is wasting several
@@ -381,6 +381,8 @@ class TestAgent {
   // flip all the bits, and send them back.
   SECStatus ReadWrite() {
     for (;;) {
+      // For DTLS, this buffer needs to be large enough for a
+      // maximum-length application data message.
       uint8_t block[16384];
       int32_t rv;
       do {
