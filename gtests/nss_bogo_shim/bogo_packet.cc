@@ -136,44 +136,29 @@ private:
     return ok;
   }
 
-  bool ReadBE32(uint32_t* result) {
-    uint8_t buf[4];
-    if (!ReadAll(&buf, 4)) {
+  bool ReadBE(size_t octets, uint64_t* result) {
+    PR_ASSERT(octets <= 8);
+    uint8_t buf[octets];
+    if (!ReadAll(&buf, octets)) {
       return false;
     }
-    *result =
-      (static_cast<uint32_t>(buf[0]) << 24) |
-      (static_cast<uint32_t>(buf[1]) << 16) |
-      (static_cast<uint32_t>(buf[2]) << 8) |
-      static_cast<uint32_t>(buf[3]);
+    *result = 0;
+    for (size_t i = 0; i < octets; ++i) {
+      *result <<= 8;
+      *result += buf[i];
+    }
     return true;
   }
 
-  bool WriteBE32(uint32_t value) {
-    const uint8_t buf[4] = {
-      static_cast<uint8_t>(value >> 24),
-      static_cast<uint8_t>(value >> 16),
-      static_cast<uint8_t>(value >> 8),
-      static_cast<uint8_t>(value)
-    };
-    return WriteAll(&buf, 4);
-  }
+  bool WriteBE(size_t octets, uint64_t value) {
+    PR_ASSERT(octets <= 8);
+    uint8_t buf[octets];
 
-  bool ReadBE64(uint64_t* result) {
-    uint8_t buf[8];
-    if (!ReadAll(&buf, 8)) {
-      return false;
+    for (size_t i = octets; i > 0; --i) {
+      buf[i - 1] = static_cast<uint8_t>(value);
+      value >>= 8;
     }
-    *result =
-      (static_cast<uint64_t>(buf[0]) << 56) |
-      (static_cast<uint64_t>(buf[1]) << 48) |
-      (static_cast<uint64_t>(buf[2]) << 40) |
-      (static_cast<uint64_t>(buf[3]) << 32) |
-      (static_cast<uint64_t>(buf[4]) << 24) |
-      (static_cast<uint64_t>(buf[5]) << 16) |
-      (static_cast<uint64_t>(buf[6]) << 8) |
-      static_cast<uint64_t>(buf[7]);
-    return true;
+    return WriteAll(&buf, octets);
   }
 
   PRInt32 Read(void* buf, PRInt32 amount) {
@@ -199,8 +184,8 @@ private:
     }
 
     if (opcode == kOpcodePacket) {
-      uint32_t ulen;
-      if (!ReadBE32(&ulen)) {
+      uint64_t ulen;
+      if (!ReadBE(4, &ulen)) {
         return -1;
       }
       const PRInt32 len = static_cast<PRInt32>(ulen);
@@ -211,7 +196,7 @@ private:
 
     if (opcode == kOpcodeTimeout) {
       uint64_t nsec;
-      if (!ReadBE64(&nsec)) {
+      if (!ReadBE(8, &nsec)) {
         return -1;
       }
       if (!WriteAll(&kOpcodeTimeoutAck, 1)) {
@@ -231,7 +216,7 @@ private:
   PRInt32 Write(const void* buf, PRInt32 amount) {
     const bool success =
       WriteAll(&kOpcodePacket, 1) &&
-      WriteBE32(static_cast<uint32_t>(amount)) &&
+      WriteBE(4, static_cast<uint64_t>(amount)) &&
       WriteAll(buf, amount);
     return success ? amount : -1;
   }
