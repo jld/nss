@@ -189,6 +189,11 @@ private:
         return -1;
       }
       const PRInt32 len = static_cast<PRInt32>(ulen);
+      // The LargeCiphertext-DTLS test deliberately generates a packet
+      // that's larger than a conforming implementation should expect.
+      // This follows the normal datagram-socket behavior and
+      // truncates it, allowing for test coverage of the parts of NSS
+      // that handle that case.
       const PRInt32 to_read = amount < len ? amount : len;
       const bool ok = ReadAll(buf, to_read) && Discard(len - to_read);
       return ok ? to_read : -1;
