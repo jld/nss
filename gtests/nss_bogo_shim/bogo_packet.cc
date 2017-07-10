@@ -11,19 +11,8 @@
 
 class BoGoPacketImpl final : public BoGoPacket {
 public:
-  uint64_t NSecUntilReadable() override {
-    return timeout_;
-  }
-
-  // FIXME jld@mozilla.com: nothing uses this yet (see comments
-  // elsewhere about why timeouts aren't handled), and this might not
-  // be the right design for fake blocking.
-  void TimeHasElapsed(uint64_t nsec) {
-    if (nsec > timeout_) {
-      timeout_ = 0;
-    } else {
-      timeout_ -= nsec;
-    }
+  bool ReceivedTimeout() override {
+    return received_timeout_;
   }
 
   static BoGoPacketImpl* FromDesc(PRFileDesc* desc) {
@@ -44,7 +33,7 @@ private:
     desc_.dtor = nullptr;
     desc_.identity = Identity();
     tcp_ = tcp;
-    timeout_ = 0;
+    received_timeout_ = false;
   }
 
   ~BoGoPacketImpl() {
@@ -188,7 +177,7 @@ private:
   }
 
   PRInt32 Read(void* buf, PRInt32 amount) {
-    if (NSecUntilReadable() > 0) {
+    if (ReceivedTimeout()) {
       PR_SetError(PR_WOULD_BLOCK_ERROR, 0);
       return -1;
     }
@@ -228,7 +217,7 @@ private:
       if (!WriteAll(&kOpcodeTimeoutAck, 1)) {
         return -1;
       }
-      timeout_ = nsec;
+      received_timeout_ = true;
       PR_SetError(PR_WOULD_BLOCK_ERROR, 0);
       return -1;
     }
@@ -274,7 +263,7 @@ private:
 
   PRFileDesc desc_;
   PRFileDesc* tcp_;
-  uint64_t timeout_;
+  bool received_timeout_;
 };
 
 /* static */ const char BoGoPacketImpl::kOpcodePacket = 'P';

@@ -398,7 +398,7 @@ class TestAgent {
     if (PR_GetError() == PR_WOULD_BLOCK_ERROR) {
       BoGoPacket* packetized = BoGoPacket::FromDesc(ssl_fd_->lower);
       PR_ASSERT(packetized);
-      if (packetized && packetized->NSecUntilReadable() > 0) {
+      if (packetized && packetized->ReceivedTimeout()) {
         // Got timeout packet.
         exitCodeUnimplemented = true;
         return false;
