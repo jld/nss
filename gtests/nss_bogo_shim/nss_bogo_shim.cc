@@ -396,7 +396,7 @@ class TestAgent {
     // minutes per test run annoying, but also the BoGo harness will
     // time out in some cases.
     if (PR_GetError() == PR_WOULD_BLOCK_ERROR) {
-      BoGoPacket* packetized = BoGoPacket::FromDesc(ssl_fd_->lower);
+      BoGoPacket* packetized = BoGoPacket::FromDesc(ssl_fd_);
       PR_ASSERT(packetized);
       if (packetized && packetized->ReceivedTimeout()) {
         // Got timeout packet.

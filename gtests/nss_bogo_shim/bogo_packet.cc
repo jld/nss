@@ -16,62 +16,49 @@ public:
   }
 
   static BoGoPacketImpl* FromDesc(PRFileDesc* desc) {
-    if (desc->identity != BoGoPacketImpl::Identity()) {
-      return nullptr;
+    Initialize();
+    desc = PR_GetIdentitiesLayer(desc, sIdentity);
+    if (desc && desc->secret) {
+      return reinterpret_cast<BoGoPacketImpl*>(desc->secret);
     }
-    return reinterpret_cast<BoGoPacketImpl*>(desc->secret);
+    return nullptr;
+  }
+
+  static PRFileDesc* MakeLayer() {
+    Initialize();
+    PRFileDesc* desc = PR_CreateIOLayerStub(sIdentity, &sMethods);
+    desc->secret = reinterpret_cast<PRFilePrivate*>(new BoGoPacketImpl());
+    return desc;
   }
 
 private:
-  friend class BoGoPacket;
+  BoGoPacketImpl()
+  : received_timeout_(false) { }
 
-  BoGoPacketImpl(PRFileDesc* tcp) {
-    desc_.methods = &kMethods;
-    desc_.secret = reinterpret_cast<PRFilePrivate*>(this);
-    desc_.lower = nullptr;
-    desc_.higher = nullptr;
-    desc_.dtor = nullptr;
-    desc_.identity = Identity();
-    tcp_ = tcp;
-    received_timeout_ = false;
+  ~BoGoPacketImpl() { }
+
+  static BoGoPacketImpl* FromDescTop(PRFileDesc* desc) {
+    const PRDescIdentity ident = PR_GetLayersIdentity(desc);
+    PR_ASSERT(ident == sIdentity);
+    if (ident == sIdentity) {
+      return reinterpret_cast<BoGoPacketImpl*>(desc->secret);
+    }
+    return nullptr;
   }
 
-  ~BoGoPacketImpl() {
-    PR_ASSERT(desc_.identity == Identity());
-    PR_ASSERT(desc_.secret == reinterpret_cast<PRFilePrivate*>(this));
-    // Need to wait until peer is done sending; otherwise it will get
-    // RST and may lose the alert that the test spec is expecting.
-    // (SO_LINGER isn't enough; need to shutdown and read to end.)
-    PR_Shutdown(tcp_, PR_SHUTDOWN_SEND);
+  static PRStatus Close(PRFileDesc* fd) {
+    PR_ASSERT(PR_GetLayersIdentity(fd) == sIdentity);
+    delete reinterpret_cast<BoGoPacketImpl*>(fd->secret);
+    fd->secret = nullptr;
+
+    sDefaultMethods->shutdown(fd, PR_SHUTDOWN_SEND);
     char buf[64];
-    while (PR_Read(tcp_, buf, sizeof(buf)) > 0)
+    while (sDefaultMethods->read(fd, buf, sizeof(buf)) > 0)
       /* discard */;
-    PR_Close(tcp_);
+    return sDefaultMethods->close(fd);
   }
 
-  static PRDescIdentity Identity() {
-    static PRDescIdentity identity = PR_INVALID_IO_LAYER;
-    if (identity == PR_INVALID_IO_LAYER) {
-      identity = PR_GetUniqueIdentity("bogo_packet");
-      PR_ASSERT(identity != PR_INVALID_IO_LAYER);
-    }
-    return identity;
-  }
-
-  static PRStatus CloseStatic(PRFileDesc* fd) {
-    delete FromDesc(fd);
-    return PR_SUCCESS;
-  }
-
-  static PRInt32 ReadStatic(PRFileDesc* fd, void* buf, PRInt32 amount) {
-    return FromDesc(fd)->Read(buf, amount);
-  }
-
-  static PRInt32 WriteStatic(PRFileDesc* fd, const void* buf, PRInt32 amount) {
-    return FromDesc(fd)->Write(buf, amount);
-  }
-
-  static PRInt32 RecvStatic(PRFileDesc* fd, void* buf, PRInt32 amount,
+  static PRInt32 RecvPacket(PRFileDesc* fd, void* buf, PRInt32 amount,
 			    PRIntn flags, PRIntervalTime timeout) {
     // Check flags and ignore timeout.
     PR_ASSERT(flags == 0);
@@ -80,10 +67,10 @@ private:
       return -1;
     }
 
-    return ReadStatic(fd, buf, amount);
+    return ReadPacket(fd, buf, amount);
   }
 
-  static PRInt32 SendStatic(PRFileDesc* fd, const void* buf, PRInt32 amount,
+  static PRInt32 SendPacket(PRFileDesc* fd, const void* buf, PRInt32 amount,
 			    PRIntn flags, PRIntervalTime timeout) {
     // Check flags and ignore timeout.
     PR_ASSERT(flags == 0);
@@ -92,12 +79,12 @@ private:
       return -1;
     }
 
-    return WriteStatic(fd, buf, amount);
+    return WritePacket(fd, buf, amount);
   }
 
-  bool ReadAll(void* buf, PRInt32 amount) {
+  static bool ReadAll(PRFileDesc *fd, void* buf, PRInt32 amount) {
     while (amount > 0) {
-      const PRInt32 result = PR_Read(tcp_, buf, amount);
+      const PRInt32 result = sDefaultMethods->read(fd, buf, amount);
       if (result < 0) {
 	return false;
       }
@@ -113,9 +100,9 @@ private:
     return true;
   }
 
-  bool WriteAll(const void* buf, PRInt32 amount) {
+  static bool WriteAll(PRFileDesc *fd, const void* buf, PRInt32 amount) {
     while (amount > 0) {
-      const PRInt32 result = PR_Write(tcp_, buf, amount);
+      const PRInt32 result = sDefaultMethods->write(fd, buf, amount);
       PR_ASSERT(result != 0);
       if (result < 0) {
 	return false;
@@ -126,20 +113,20 @@ private:
     return true;
   }
 
-  bool Discard(PRInt32 amount) {
+  static bool Discard(PRFileDesc* fd, PRInt32 amount) {
     if (amount == 0) {
       return true;
     }
     char* const buf = new char[amount];
-    const bool ok = ReadAll(buf, amount);
+    const bool ok = ReadAll(fd, buf, amount);
     delete[] buf;
     return ok;
   }
 
-  bool ReadBE(size_t octets, uint64_t* result) {
+  static bool ReadBE(PRFileDesc* fd, size_t octets, uint64_t* result) {
     PR_ASSERT(octets <= 8);
     uint8_t buf[octets];
-    if (!ReadAll(&buf, octets)) {
+    if (!ReadAll(fd, &buf, octets)) {
       return false;
     }
     *result = 0;
@@ -150,7 +137,7 @@ private:
     return true;
   }
 
-  bool WriteBE(size_t octets, uint64_t value) {
+  static bool WriteBE(PRFileDesc* fd, size_t octets, uint64_t value) {
     PR_ASSERT(octets <= 8);
     uint8_t buf[octets];
 
@@ -158,11 +145,13 @@ private:
       buf[i - 1] = static_cast<uint8_t>(value);
       value >>= 8;
     }
-    return WriteAll(&buf, octets);
+    return WriteAll(fd, &buf, octets);
   }
 
-  PRInt32 Read(void* buf, PRInt32 amount) {
-    if (ReceivedTimeout()) {
+  static PRInt32 ReadPacket(PRFileDesc* fd, void* buf, PRInt32 amount) {
+    const auto self = FromDescTop(fd);
+
+    if (self->ReceivedTimeout()) {
       PR_SetError(PR_WOULD_BLOCK_ERROR, 0);
       return -1;
     }
@@ -179,13 +168,13 @@ private:
     // * Deadlock and test failure.
     // However, using a nonblocking read (PR_Recv with PR_INTERVAL_NO_WAIT)
     // causes a number of other tests to break.  This need to be investigated.
-    if (!ReadAll(&opcode, 1)) {
+    if (!ReadAll(fd, &opcode, 1)) {
       return -1;
     }
 
     if (opcode == kOpcodePacket) {
       uint64_t ulen;
-      if (!ReadBE(4, &ulen)) {
+      if (!ReadBE(fd, 4, &ulen)) {
         return -1;
       }
       const PRInt32 len = static_cast<PRInt32>(ulen);
@@ -195,19 +184,19 @@ private:
       // truncates it, allowing for test coverage of the parts of NSS
       // that handle that case.
       const PRInt32 to_read = amount < len ? amount : len;
-      const bool ok = ReadAll(buf, to_read) && Discard(len - to_read);
+      const bool ok = ReadAll(fd, buf, to_read) && Discard(fd, len - to_read);
       return ok ? to_read : -1;
     }
 
     if (opcode == kOpcodeTimeout) {
       uint64_t nsec;
-      if (!ReadBE(8, &nsec)) {
+      if (!ReadBE(fd, 8, &nsec)) {
         return -1;
       }
-      if (!WriteAll(&kOpcodeTimeoutAck, 1)) {
+      if (!WriteAll(fd, &kOpcodeTimeoutAck, 1)) {
         return -1;
       }
-      received_timeout_ = true;
+      self->received_timeout_ = true;
       PR_SetError(PR_WOULD_BLOCK_ERROR, 0);
       return -1;
     }
@@ -218,24 +207,16 @@ private:
     return -1;
   }
 
-  PRInt32 Write(const void* buf, PRInt32 amount) {
+  static PRInt32 WritePacket(PRFileDesc* fd, const void* buf, PRInt32 amount) {
     const bool success =
-      WriteAll(&kOpcodePacket, 1) &&
-      WriteBE(4, static_cast<uint64_t>(amount)) &&
-      WriteAll(buf, amount);
+      WriteAll(fd, &kOpcodePacket, 1) &&
+      WriteBE(fd, 4, static_cast<uint64_t>(amount)) &&
+      WriteAll(fd, buf, amount);
     return success ? amount : -1;
   }
 
-  static PRStatus GetSockNameStatic(PRFileDesc* fd, PRNetAddr* addr) {
-    return PR_GetSockName(FromDesc(fd)->tcp_, addr);
-  }
-
-  static PRStatus GetPeerNameStatic(PRFileDesc* fd, PRNetAddr* addr) {
-    return PR_GetPeerName(FromDesc(fd)->tcp_, addr);
-  }
-
-  static PRStatus GetSocketOptionStatic(PRFileDesc* fd,
-					PRSocketOptionData* data) {
+  static PRStatus GetSocketOption(PRFileDesc* fd,
+                                  PRSocketOptionData* data) {
     if (data->option == PR_SockOpt_Nonblocking) {
       data->value.non_blocking = PR_TRUE;
       return PR_SUCCESS;
@@ -245,14 +226,37 @@ private:
     return PR_FAILURE;
   }
 
-  static const PRIOMethods kMethods;
+  static void Initialize(void) {
+    if (sIdentity != PR_INVALID_IO_LAYER) {
+      return;
+    }
+    sIdentity = PR_GetUniqueIdentity("bogo_packet");
+    PR_ASSERT(sIdentity != PR_INVALID_IO_LAYER);
+
+    sDefaultMethods = PR_GetDefaultIOMethods();
+
+    // This can't be PR_DESC_SOCKET_UDP; pl_TopClose insists.
+    sMethods.file_type = PR_DESC_LAYERED;
+    sMethods.close = Close;
+    sMethods.read = ReadPacket;
+    sMethods.write = WritePacket;
+    sMethods.recv = RecvPacket;
+    sMethods.send = SendPacket;
+    sMethods.getsocketoption = GetSocketOption;
+    sMethods.getsockname = sDefaultMethods->getsockname;
+    sMethods.getpeername = sDefaultMethods->getpeername;
+  }
 
   static const char kOpcodePacket;
   static const char kOpcodeTimeout;
   static const char kOpcodeTimeoutAck;
 
-  PRFileDesc desc_;
-  PRFileDesc* tcp_;
+  static PRDescIdentity sIdentity;
+  static PRIOMethods sMethods;
+  static const PRIOMethods* sDefaultMethods;
+
+  // In the future, this will have more state to actually deal with
+  // timeouts.
   bool received_timeout_;
 };
 
@@ -260,47 +264,15 @@ private:
 /* static */ const char BoGoPacketImpl::kOpcodeTimeout = 'T';
 /* static */ const char BoGoPacketImpl::kOpcodeTimeoutAck = 't';
 
-/* static */ const PRIOMethods BoGoPacketImpl::kMethods = {
-  PR_DESC_SOCKET_UDP, // file_type
-  CloseStatic,
-  ReadStatic,
-  WriteStatic,
-  nullptr, // available
-  nullptr, // available64
-  nullptr, // fsync
-  nullptr, // seek
-  nullptr, // seek64
-  nullptr, // fileinfo
-  nullptr, // fileinfo64
-  nullptr, // writev
-  nullptr, // connect
-  nullptr, // accept
-  nullptr, // bind
-  nullptr, // listen
-  nullptr, // shutdown
-  RecvStatic,
-  SendStatic,
-  nullptr, // recvfrom
-  nullptr, // sendto
-  nullptr, // poll
-  nullptr, // acceptread
-  nullptr, // transmitfile
-  GetSockNameStatic,
-  GetPeerNameStatic,
-  nullptr, // reserved_fn_6
-  nullptr, // reserved_fn_5
-  GetSocketOptionStatic,
-  nullptr, // setsocketoption
-  nullptr, // sendfile
-  nullptr, // connectcontinue
-  nullptr, // reserved_fn_3
-  nullptr, // reserved_fn_2
-  nullptr, // reserved_fn_1
-  nullptr, // reserved_fn_0
-};
+/* static */ PRDescIdentity BoGoPacketImpl::sIdentity = PR_INVALID_IO_LAYER;
+/* static */ PRIOMethods BoGoPacketImpl::sMethods;
+/* static */ const PRIOMethods* BoGoPacketImpl::sDefaultMethods;
 
 PRFileDesc* BoGoPacket::Import(PRFileDesc* tcp) {
-  return &(new BoGoPacketImpl(tcp))->desc_;
+  PRFileDesc* layer = BoGoPacketImpl::MakeLayer();
+  PRStatus status = PR_PushIOLayer(tcp, PR_TOP_IO_LAYER, layer);
+  PR_ASSERT(PR_SUCCESS == status);
+  return tcp;
 }
 
 BoGoPacket* BoGoPacket::FromDesc(PRFileDesc* desc) {
