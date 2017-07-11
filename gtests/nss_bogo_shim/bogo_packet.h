@@ -8,7 +8,7 @@
 
 class BoGoPacket {
 public:
-  static PRFileDesc* Import(PRFileDesc* tcp);
+  static PRFileDesc* Wrap(PRFileDesc* tcp);
   static BoGoPacket* FromDesc(PRFileDesc* desc);
   virtual bool ReceivedTimeout() = 0;
 };

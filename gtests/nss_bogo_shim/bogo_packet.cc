@@ -266,7 +266,7 @@ private:
 /* static */ PRIOMethods BoGoPacketImpl::sMethods;
 /* static */ const PRIOMethods* BoGoPacketImpl::sDefaultMethods;
 
-PRFileDesc* BoGoPacket::Import(PRFileDesc* tcp) {
+PRFileDesc* BoGoPacket::Wrap(PRFileDesc* tcp) {
   PRFileDesc* layer = BoGoPacketImpl::MakeLayer();
   PRStatus status = PR_PushIOLayer(tcp, PR_TOP_IO_LAYER, layer);
   PR_ASSERT(PR_SUCCESS == status);

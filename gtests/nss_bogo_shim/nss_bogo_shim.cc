@@ -106,7 +106,7 @@ class TestAgent {
     }
 
     if (cfg_.get<bool>("dtls")) {
-      pr_fd_ = BoGoPacket::Import(pr_fd_);
+      pr_fd_ = BoGoPacket::Wrap(pr_fd_);
       ssl_fd_ = DTLS_ImportFD(NULL, pr_fd_);
     } else {
       ssl_fd_ = SSL_ImportFD(NULL, pr_fd_);
