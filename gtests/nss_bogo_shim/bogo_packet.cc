@@ -15,40 +15,38 @@ public:
     return received_timeout_;
   }
 
-  static BoGoPacketImpl* FromDesc(PRFileDesc* desc) {
+  static BoGoPacketImpl* FromDesc(PRFileDesc* fd) {
     Initialize();
-    desc = PR_GetIdentitiesLayer(desc, sIdentity);
-    if (desc && desc->secret) {
-      return reinterpret_cast<BoGoPacketImpl*>(desc->secret);
+    fd = PR_GetIdentitiesLayer(fd, sIdentity);
+    if (fd && fd->secret) {
+      return reinterpret_cast<BoGoPacketImpl*>(fd->secret);
     }
     return nullptr;
   }
 
   static PRFileDesc* MakeLayer() {
     Initialize();
-    PRFileDesc* desc = PR_CreateIOLayerStub(sIdentity, &sMethods);
-    desc->secret = reinterpret_cast<PRFilePrivate*>(new BoGoPacketImpl());
-    return desc;
+    const auto fd = PR_CreateIOLayerStub(sIdentity, &sMethods);
+    fd->secret = reinterpret_cast<PRFilePrivate*>(new BoGoPacketImpl());
+    return fd;
   }
 
 private:
-  BoGoPacketImpl()
-  : received_timeout_(false) { }
+  BoGoPacketImpl() : received_timeout_(false) { }
 
   ~BoGoPacketImpl() { }
 
-  static BoGoPacketImpl* FromDescTop(PRFileDesc* desc) {
-    const PRDescIdentity ident = PR_GetLayersIdentity(desc);
+  static BoGoPacketImpl* FromDescTop(PRFileDesc* fd) {
+    const auto ident = PR_GetLayersIdentity(fd);
     PR_ASSERT(ident == sIdentity);
     if (ident == sIdentity) {
-      return reinterpret_cast<BoGoPacketImpl*>(desc->secret);
+      return reinterpret_cast<BoGoPacketImpl*>(fd->secret);
     }
     return nullptr;
   }
 
   static PRStatus Close(PRFileDesc* fd) {
-    PR_ASSERT(PR_GetLayersIdentity(fd) == sIdentity);
-    delete reinterpret_cast<BoGoPacketImpl*>(fd->secret);
+    delete FromDescTop(fd);
     fd->secret = nullptr;
 
     sDefaultMethods->shutdown(fd, PR_SHUTDOWN_SEND);
@@ -256,7 +254,7 @@ private:
   static const PRIOMethods* sDefaultMethods;
 
   // In the future, this will have more state to actually deal with
-  // timeouts.
+  // timeouts and let simulated time elapse.
   bool received_timeout_;
 };
 
@@ -275,6 +273,6 @@ PRFileDesc* BoGoPacket::Import(PRFileDesc* tcp) {
   return tcp;
 }
 
-BoGoPacket* BoGoPacket::FromDesc(PRFileDesc* desc) {
-  return BoGoPacketImpl::FromDesc(desc);
+BoGoPacket* BoGoPacket::FromDesc(PRFileDesc* fd) {
+  return BoGoPacketImpl::FromDesc(fd);
 }
